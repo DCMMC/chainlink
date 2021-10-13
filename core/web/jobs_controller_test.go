@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"net/http"
+	"sync"
 	"testing"
 	"time"
 
@@ -90,6 +91,34 @@ func TestJobsController_Create_ValidationFailure_OffchainReportingSpec(t *testin
 			assert.Contains(t, string(b), tc.expectedErr.Error())
 		})
 	}
+}
+
+func TestJobController_Create_DirectRequest_Fast(t *testing.T) {
+	app, client := setupJobsControllerTests(t)
+	app.KeyStore.OCR().Add(cltest.DefaultOCRKey)
+	app.KeyStore.P2P().Add(cltest.DefaultP2PKey)
+
+	n := 5
+
+	var wg sync.WaitGroup
+	for i := 0; i < n; i++ {
+		wg.Add(1)
+		go func(i int) {
+			defer wg.Done()
+
+			body, err := json.Marshal(web.CreateJobRequest{
+				TOML: fmt.Sprintf(testspecs.DirectRequestSpecNoExternalJobID, i),
+			})
+			require.NoError(t, err)
+
+			t.Logf("POSTing %d", i)
+			r, cleanup := client.Post("/v2/jobs", bytes.NewReader(body))
+			defer cleanup()
+			require.Equal(t, http.StatusOK, r.StatusCode)
+		}(i)
+	}
+	wg.Wait()
+	cltest.AssertCount(t, app.GetDB(), job.DirectRequestSpec{}, int64(n))
 }
 
 func TestJobController_Create_HappyPath(t *testing.T) {

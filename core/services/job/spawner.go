@@ -2,6 +2,7 @@ package job
 
 import (
 	"context"
+	"fmt"
 	"math"
 	"reflect"
 	"sync"
@@ -177,6 +178,7 @@ func (js *spawner) StartService(spec Job) error {
 
 // Should not get called before Start()
 func (js *spawner) CreateJob(ctx context.Context, spec Job, name null.String) (Job, error) {
+	fmt.Println("BALLS CreateJob")
 	var jb Job
 	var err error
 	delegate, exists := js.jobTypeDelegates[spec.Type]
@@ -184,6 +186,8 @@ func (js *spawner) CreateJob(ctx context.Context, spec Job, name null.String) (J
 		logger.Errorf("job type '%s' has not been registered with the job.Spawner", spec.Type)
 		return jb, errors.Errorf("job type '%s' has not been registered with the job.Spawner", spec.Type)
 	}
+
+	fmt.Println("BALLS CreateJob 1")
 
 	ctx, cancel := utils.CombinedContext(js.chStop, ctx)
 	defer cancel()
@@ -205,13 +209,17 @@ func (js *spawner) CreateJob(ctx context.Context, spec Job, name null.String) (J
 	if err != nil {
 		return jb, err
 	}
+	fmt.Println("BALLS CreateJob 2")
 
 	if err = js.StartService(jb); err != nil {
 		return jb, err
 	}
+	fmt.Println("BALLS CreateJob 3")
 
 	delegate.AfterJobCreated(jb)
+	fmt.Println("BALLS CreateJob 4")
 
+	fmt.Println("BALLS CreateJob DONE")
 	logger.Infow("Created job", "type", jb.Type, "jobID", jb.ID)
 	return jb, err
 }
