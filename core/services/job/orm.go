@@ -140,21 +140,21 @@ func (o *orm) CreateJob(ctx context.Context, jobSpec *Job, p pipeline.Pipeline) 
 			jobSpec.ExternalJobID = uuid.NewV4()
 		}
 
+		var specID int32
 		switch jobSpec.Type {
 		case DirectRequest:
 			sql := `INSERT INTO direct_request_specs (contract_address, min_incoming_confirmations, requesters, min_contract_payment, evm_chain_id, created_at, updated_at)
 			VALUES (:contract_address, :min_incoming_confirmations, :requesters, :min_contract_payment, :evm_chain_id, now(), now());`
-			_, err := tx.NamedExec(sql, jobSpec.DirectRequestSpec, jobSpec.DirectRequestSpec)
-			if err != nil {
+			if err := tx.QueryRowx(sql, jobSpec.DirectRequestSpec).Scan(specID); err != nil {
 				return errors.Wrap(err, "failed to create DirectRequestSpec for jobSpec")
 			}
-			jobSpec.DirectRequestSpecID = &jobSpec.DirectRequestSpec.ID
+			jobSpec.DirectRequestSpecID = &specID
 		case FluxMonitor:
 			sql := `INSERT INTO flux_monitor_specs (contract_address, threshold, absolute_threshold, poll_timer_period, poll_timer_disabled, idle_timer_period, idle_timer_disabled 
 					drumbeat_schedule, drumbeat_random_delay, drumbeat_enabled, min_payment, evm_chain_id, created_at, updated_at)
 			VALUES (:contract_address, :threshold, :absolute_threshold, :poll_timer_period, :poll_timer_disabled, :idle_timer_period, :idle_timer_disabled 
 					:drumbeat_schedule, :drumbeat_random_delay, :drumbeat_enabled, :min_payment, :evm_chain_id, NOW(), NOW());`
-			err := postgres.PrepareGet(tx, sql, jobSpec.FluxMonitorSpec, jobSpec.FluxMonitorSpec)
+			_, err := tx.NamedExec(sql, jobSpec.FluxMonitorSpec)
 			if err != nil {
 				return errors.Wrap(err, "failed to create FluxMonitorSpec for jobSpec")
 			}
@@ -184,14 +184,13 @@ func (o *orm) CreateJob(ctx context.Context, jobSpec *Job, p pipeline.Pipeline) 
 					created_at, updated_at)
 			VALUES (:contract_address, :p2p_peer_id, :p2p_bootstrap_peers, :is_bootstrap_peer, :encrypted_ocr_key_bundle_id, :transmitter_address,
 					:observation_timeout, :blockchain_timeout, :contract_config_tracker_subscribe_interval, :contract_config_tracker_poll_interval, :contract_config_confirmations, :evm_chain_id,
-					NOW(), NOW());`
-			fmt.Println("BALLS before", jobSpec.OffchainreportingOracleSpec)
-			err := postgres.PrepareGet(tx, sql, jobSpec.OffchainreportingOracleSpec, jobSpec.OffchainreportingOracleSpec)
+					NOW(), NOW())
+			RETURNING id;`
+			err := postgres.PrepareQueryRowx(tx, sql, &specID, jobSpec.OffchainreportingOracleSpec)
 			if err != nil {
 				return errors.Wrap(err, "failed to create OffchainreportingOracleSpec for jobSpec")
 			}
-			fmt.Println("BALLS after", jobSpec.OffchainreportingOracleSpec)
-			jobSpec.OffchainreportingOracleSpecID = &jobSpec.OffchainreportingOracleSpec.ID
+			jobSpec.OffchainreportingOracleSpecID = &specID
 		case Keeper:
 			sql := `INSERT INTO keeper_specs (contract_address, from_address, evm_chain_id, created_at, updated_at)
 			VALUES (:contract_address, :from_address, :evm_chain_id, NOW(), NOW());`

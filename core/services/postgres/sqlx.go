@@ -110,3 +110,11 @@ func PrepareGet(q Queryer, sql string, dest interface{}, arg interface{}) error 
 	}
 	return errors.Wrap(stmt.Get(dest, arg), "error in get query")
 }
+
+func PrepareQueryRowx(q Queryer, sql string, dest interface{}, arg interface{}) error {
+	stmt, err := q.PrepareNamed(sql)
+	if err != nil {
+		return errors.Wrap(err, "error preparing named statement")
+	}
+	return errors.Wrap(stmt.QueryRowx(arg).Scan(dest), "error querying row")
+}
