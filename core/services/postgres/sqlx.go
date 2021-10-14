@@ -16,6 +16,9 @@ import (
 type Queryer interface {
 	sqlx.Ext
 	sqlx.ExtContext
+	sqlx.Preparer
+	sqlx.PreparerContext
+	PrepareNamed(query string) (*sqlx.NamedStmt, error)
 	QueryRow(query string, args ...interface{}) *sql.Row
 }
 
@@ -93,4 +96,12 @@ func SqlxTransaction(ctx context.Context, q Queryer, fc func(tx *sqlx.Tx) error,
 	}
 
 	return
+}
+
+func PrepareGet(q Queryer, sql string, dest interface{}, arg interface{}) error {
+	stmt, err := q.PrepareNamed(sql)
+	if err != nil {
+		return err
+	}
+	return stmt.Get(dest, arg)
 }

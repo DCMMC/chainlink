@@ -18,8 +18,6 @@ import (
 	"github.com/jackc/pgconn"
 	"github.com/pkg/errors"
 	uuid "github.com/satori/go.uuid"
-	"gorm.io/gorm"
-	"gorm.io/gorm/clause"
 )
 
 var (
@@ -51,7 +49,7 @@ type ORM interface {
 }
 
 type orm struct {
-	db          *gorm.DB
+	db          *sqlx.DB
 	chainSet    evm.ChainSet
 	keyStore    keystore.Master
 	pipelineORM pipeline.ORM
@@ -61,7 +59,7 @@ type orm struct {
 var _ ORM = (*orm)(nil)
 
 func NewORM(
-	db *gorm.DB,
+	db *sqlx.DB,
 	chainSet evm.ChainSet,
 	pipelineORM pipeline.ORM,
 	keyStore keystore.Master, // needed to validation key properties on new job creation
@@ -76,7 +74,7 @@ func NewORM(
 	}
 }
 
-func PreloadAllJobTypes(db *gorm.DB) *gorm.DB {
+func PreloadAllJobTypes(db *sqlx.DB) *sqlx.DB {
 	return db.
 		Preload("PipelineSpec").
 		Preload("FluxMonitorSpec").
@@ -105,111 +103,146 @@ func (o *orm) CreateJob(ctx context.Context, jobSpec *Job, p pipeline.Pipeline) 
 		if task.Type() == pipeline.TaskTypeBridge {
 			// Bridge must exist
 			name := task.(*pipeline.BridgeTask).Name
-			bt := bridges.BridgeType{}
-			if err := o.db.First(&bt, "name = ?", name).Error; err != nil {
-				if errors.Is(err, gorm.ErrRecordNotFound) {
-					return jb, errors.Wrap(pipeline.ErrNoSuchBridge, name)
-				}
+
+			sql := `SELECT EXISTS(SELECT 1 FROM bridge_types WHERE name = $1);`
+			var exists bool
+			err := o.db.QueryRowx(sql, name).Scan(&exists)
+			if err != nil {
 				return jb, err
 			}
+			if !exists {
+				return jb, errors.Wrap(pipeline.ErrNoSuchBridge, name)
+			}
 		}
 	}
 
-	tx := postgres.TxFromContext(ctx, o.db)
+	err := postgres.SqlxTransaction(ctx, o.db, func(tx *sqlx.Tx) error {
 
-	// Autogenerate a job ID if not specified
-	if jobSpec.ExternalJobID == (uuid.UUID{}) {
-		jobSpec.ExternalJobID = uuid.NewV4()
-	}
+		// Autogenerate a job ID if not specified
+		if jobSpec.ExternalJobID == (uuid.UUID{}) {
+			jobSpec.ExternalJobID = uuid.NewV4()
+		}
 
-	switch jobSpec.Type {
-	case DirectRequest:
-		err := tx.Create(&jobSpec.DirectRequestSpec).Error
-		if err != nil {
-			return jb, errors.Wrap(err, "failed to create DirectRequestSpec for jobSpec")
-		}
-		jobSpec.DirectRequestSpecID = &jobSpec.DirectRequestSpec.ID
-	case FluxMonitor:
-		err := tx.Create(&jobSpec.FluxMonitorSpec).Error
-		if err != nil {
-			return jb, errors.Wrap(err, "failed to create FluxMonitorSpec for jobSpec")
-		}
-		jobSpec.FluxMonitorSpecID = &jobSpec.FluxMonitorSpec.ID
-	case OffchainReporting:
-		if jobSpec.OffchainreportingOracleSpec.EncryptedOCRKeyBundleID != nil {
-			_, err := o.keyStore.OCR().Get(jobSpec.OffchainreportingOracleSpec.EncryptedOCRKeyBundleID.String())
+		switch jobSpec.Type {
+		case DirectRequest:
+			sql := `INSERT INTO direct_request_specs (contract_address, min_incoming_confirmations, requesters, min_contract_payment, evm_chain_id, created_at, updated_at)
+			VALUES (:contract_address, :min_incoming_confirmations, :requesters, :min_contract_payment, :evm_chain_id, now(), now())
+			RETURNING *;`
+			err := postgres.PrepareGet(tx, sql, &jobSpec.DirectRequestSpec, &jobSpec.DirectRequestSpec)
 			if err != nil {
-				return jb, errors.Wrapf(ErrNoSuchKeyBundle, "%v", jobSpec.OffchainreportingOracleSpec.EncryptedOCRKeyBundleID)
+				return errors.Wrap(err, "failed to create DirectRequestSpec for jobSpec")
 			}
-		}
-		if jobSpec.OffchainreportingOracleSpec.P2PPeerID != nil {
-			_, err := o.keyStore.P2P().Get(jobSpec.OffchainreportingOracleSpec.P2PPeerID.Raw())
+			jobSpec.DirectRequestSpecID = &jobSpec.DirectRequestSpec.ID
+		case FluxMonitor:
+			sql := `INSERT INTO flux_monitor_specs (contract_address, threshold, absolute_threshold, poll_timer_period, poll_timer_disabled, idle_timer_period, idle_timer_disabled 
+					drumbeat_schedule, drumbeat_random_delay, drumbeat_enabled, min_payment, evm_chain_id, created_at, updated_at)
+			VALUES (:contract_address, :threshold, :absolute_threshold, :poll_timer_period, :poll_timer_disabled, :idle_timer_period, :idle_timer_disabled 
+					:drumbeat_schedule, :drumbeat_random_delay, :drumbeat_enabled, :min_payment, :evm_chain_id, NOW(), NOW())
+			RETURNING *;`
+			err := postgres.PrepareGet(tx, sql, &jobSpec.FluxMonitorSpec, &jobSpec.FluxMonitorSpec)
 			if err != nil {
-				return jb, errors.Wrapf(ErrNoSuchPeerID, "%v", jobSpec.OffchainreportingOracleSpec.P2PPeerID)
+				return errors.Wrap(err, "failed to create FluxMonitorSpec for jobSpec")
 			}
-		}
-		if jobSpec.OffchainreportingOracleSpec.TransmitterAddress != nil {
-			_, err := o.keyStore.Eth().Get(jobSpec.OffchainreportingOracleSpec.TransmitterAddress.Hex())
+			jobSpec.FluxMonitorSpecID = &jobSpec.FluxMonitorSpec.ID
+		case OffchainReporting:
+			if jobSpec.OffchainreportingOracleSpec.EncryptedOCRKeyBundleID != nil {
+				_, err := o.keyStore.OCR().Get(jobSpec.OffchainreportingOracleSpec.EncryptedOCRKeyBundleID.String())
+				if err != nil {
+					return errors.Wrapf(ErrNoSuchKeyBundle, "%v", jobSpec.OffchainreportingOracleSpec.EncryptedOCRKeyBundleID)
+				}
+			}
+			if jobSpec.OffchainreportingOracleSpec.P2PPeerID != nil {
+				_, err := o.keyStore.P2P().Get(jobSpec.OffchainreportingOracleSpec.P2PPeerID.Raw())
+				if err != nil {
+					return errors.Wrapf(ErrNoSuchPeerID, "%v", jobSpec.OffchainreportingOracleSpec.P2PPeerID)
+				}
+			}
+			if jobSpec.OffchainreportingOracleSpec.TransmitterAddress != nil {
+				_, err := o.keyStore.Eth().Get(jobSpec.OffchainreportingOracleSpec.TransmitterAddress.Hex())
+				if err != nil {
+					return errors.Wrapf(ErrNoSuchTransmitterAddress, "%v", jobSpec.OffchainreportingOracleSpec.TransmitterAddress)
+				}
+			}
+
+			sql := `INSERT INTO offchainreporting_oracle_specs (contract_address, p2p_peer_id, p2p_bootstrap_peers, is_bootstrap_peer, encrypted_ocr_key_bundle_id, transmitter_address,
+					observation_timeout, blockchain_timeout, contract_config_tracker_subscribe_interval, contract_config_tracker_poll_interval, contract_config_confirmations, evm_chain_id,
+					created_at, updated_at)
+			VALUES (:contract_address, :p2p_peer_id, :p2p_bootstrap_peers, :is_bootstrap_peer, :encrypted_ocr_key_bundle_id, :transmitter_address,
+					:observation_timeout, :blockchain_timeout, :contract_config_tracker_subscribe_interval, :contract_config_tracker_poll_interval, :contract_config_confirmations, evm_chain_id,
+					NOW(), NOW())
+			RETURNING *;`
+			err := postgres.PrepareGet(tx, sql, &jobSpec.OffchainreportingOracleSpec, &jobSpec.OffchainreportingOracleSpec)
 			if err != nil {
-				return jb, errors.Wrapf(ErrNoSuchTransmitterAddress, "%v", jobSpec.OffchainreportingOracleSpec.TransmitterAddress)
+				return errors.Wrap(err, "failed to create OffchainreportingOracleSpec for jobSpec")
 			}
+			jobSpec.OffchainreportingOracleSpecID = &jobSpec.OffchainreportingOracleSpec.ID
+		case Keeper:
+			sql := `INSERT INTO keeper_specs (contract_address, from_address, evm_chain_id, created_at, updated_at)
+			VALUES (:contract_address, :from_address, :evm_chain_id, NOW(), NOW())
+			RETURNING *;`
+			err := postgres.PrepareGet(tx, sql, &jobSpec.KeeperSpec, &jobSpec.KeeperSpec)
+			if err != nil {
+				return errors.Wrap(err, "failed to create KeeperSpec for jobSpec")
+			}
+			jobSpec.KeeperSpecID = &jobSpec.KeeperSpec.ID
+		case Cron:
+			sql := `INSERT INTO cron_specs (cron_schedule, created_at, updated_at)
+			VALUES (:cron_schedule, NOW(), NOW())
+			RETURNING *;`
+			err := postgres.PrepareGet(tx, sql, &jobSpec.CronSpec, &jobSpec.CronSpec)
+			if err != nil {
+				return errors.Wrap(err, "failed to create CronSpec for jobSpec")
+			}
+			jobSpec.CronSpecID = &jobSpec.CronSpec.ID
+		case VRF:
+			sql := `INSERT INTO vrf_specs (coordinator_address, public_key, confirmations, evm_chain_id, created_at, updated_at)
+			VALUES (:coordinator_address, :public_key, :confirmations, :evm_chain_id, NOW(), NOW())
+			RETURNING *;`
+			err := postgres.PrepareGet(tx, sql, &jobSpec.VRFSpec, &jobSpec.VRFSpec)
+			pqErr, ok := err.(*pgconn.PgError)
+			if err != nil && ok && pqErr.Code == "23503" {
+				if pqErr.ConstraintName == "vrf_specs_public_key_fkey" {
+					return errors.Wrapf(ErrNoSuchPublicKey, "%s", jobSpec.VRFSpec.PublicKey.String())
+				}
+			}
+			if err != nil {
+				return errors.Wrap(err, "failed to create VRFSpec for jobSpec")
+			}
+			jobSpec.VRFSpecID = &jobSpec.VRFSpec.ID
+		case Webhook:
+			sql := `INSERT INTO webhook_specs (created_at, updated_at)
+			VALUES (NOW(), NOW())
+			RETURNING *;`
+			err := postgres.PrepareGet(tx, sql, &jobSpec.WebhookSpec, &jobSpec.WebhookSpec)
+			if err != nil {
+				return errors.Wrap(err, "failed to create WebhookSpec for jobSpec")
+			}
+			jobSpec.WebhookSpecID = &jobSpec.WebhookSpec.ID
+
+			for i := range jobSpec.WebhookSpec.ExternalInitiatorWebhookSpecs {
+				jobSpec.WebhookSpec.ExternalInitiatorWebhookSpecs[i].WebhookSpecID = jobSpec.WebhookSpec.ID
+			}
+			sqlEI := `INSERT INTO external_initiator_webhook_specs (external_initiator_id, webhook_spec_id, spec)
+			VALUES (:external_initiator_id, :webhook_spec_id, :spec)
+			RETURNING *;`
+			err = postgres.PrepareGet(tx, sqlEI, &jobSpec.WebhookSpec.ExternalInitiatorWebhookSpecs, &jobSpec.WebhookSpec.ExternalInitiatorWebhookSpecs)
+			if err != nil {
+				return errors.Wrap(err, "failed to create WebhookSpec for jobSpec")
+			}
+		default:
+			logger.Fatalf("Unsupported jobSpec.Type: %v", jobSpec.Type)
 		}
 
-		err := tx.Create(&jobSpec.OffchainreportingOracleSpec).Error
+		pipelineSpecID, err := o.pipelineORM.CreateSpec(ctx, tx, p, jobSpec.MaxTaskDuration)
 		if err != nil {
-			return jb, errors.Wrap(err, "failed to create OffchainreportingOracleSpec for jobSpec")
+			return jb, errors.Wrap(err, "failed to create pipeline spec")
 		}
-		jobSpec.OffchainreportingOracleSpecID = &jobSpec.OffchainreportingOracleSpec.ID
-	case Keeper:
-		err := tx.Create(&jobSpec.KeeperSpec).Error
+		jobSpec.PipelineSpecID = pipelineSpecID
+		err = tx.Create(jobSpec).Error
 		if err != nil {
-			return jb, errors.Wrap(err, "failed to create KeeperSpec for jobSpec")
+			return jb, errors.Wrap(err, "failed to create job")
 		}
-		jobSpec.KeeperSpecID = &jobSpec.KeeperSpec.ID
-	case Cron:
-		err := tx.Create(&jobSpec.CronSpec).Error
-		if err != nil {
-			return jb, errors.Wrap(err, "failed to create CronSpec for jobSpec")
-		}
-		jobSpec.CronSpecID = &jobSpec.CronSpec.ID
-	case VRF:
-		err := tx.Create(&jobSpec.VRFSpec).Error
-		pqErr, ok := err.(*pgconn.PgError)
-		if err != nil && ok && pqErr.Code == "23503" {
-			if pqErr.ConstraintName == "vrf_specs_public_key_fkey" {
-				return jb, errors.Wrapf(ErrNoSuchPublicKey, "%s", jobSpec.VRFSpec.PublicKey.String())
-			}
-		}
-		if err != nil {
-			return jb, errors.Wrap(err, "failed to create VRFSpec for jobSpec")
-		}
-		jobSpec.VRFSpecID = &jobSpec.VRFSpec.ID
-	case Webhook:
-		err := tx.Create(&jobSpec.WebhookSpec).Error
-		if err != nil {
-			return jb, errors.Wrap(err, "failed to create WebhookSpec for jobSpec")
-		}
-		jobSpec.WebhookSpecID = &jobSpec.WebhookSpec.ID
-		for i, eiWS := range jobSpec.WebhookSpec.ExternalInitiatorWebhookSpecs {
-			jobSpec.WebhookSpec.ExternalInitiatorWebhookSpecs[i].WebhookSpecID = jobSpec.WebhookSpec.ID
-			err := tx.Create(&jobSpec.WebhookSpec.ExternalInitiatorWebhookSpecs[i]).Error
-			if err != nil {
-				return jb, errors.Wrapf(err, "failed to create ExternalInitiatorWebhookSpec for WebhookSpec: %#v", eiWS)
-			}
-		}
-	default:
-		logger.Fatalf("Unsupported jobSpec.Type: %v", jobSpec.Type)
-	}
-
-	pipelineSpecID, err := o.pipelineORM.CreateSpec(ctx, tx, p, jobSpec.MaxTaskDuration)
-	if err != nil {
-		return jb, errors.Wrap(err, "failed to create pipeline spec")
-	}
-	jobSpec.PipelineSpecID = pipelineSpecID
-	err = tx.Create(jobSpec).Error
-	if err != nil {
-		return jb, errors.Wrap(err, "failed to create job")
-	}
+	})
 
 	return o.FindJob(ctx, jobSpec.ID)
 }
