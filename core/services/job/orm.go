@@ -3,6 +3,7 @@ package job
 import (
 	"context"
 	"fmt"
+	"reflect"
 	"time"
 
 	"github.com/smartcontractkit/chainlink/core/chains/evm"
@@ -97,6 +98,11 @@ func loadJobType(tx *sqlx.Tx, dest interface{}, table string, id *int32) error {
 	if id == nil {
 		return nil
 	}
+	// initialise dest if its nil (my LIFE for generics)
+	rv := reflect.ValueOf(&dest).Elem()
+	t := rv.Elem().Type().Elem()
+	rv.Set(reflect.New(t))
+
 	err := tx.Get(dest, fmt.Sprintf(`SELECT * FROM %s WHERE id = $1`, table), *id)
 	return errors.Wrapf(err, "failed to load job type %s with id %d", table, *id)
 }
@@ -106,9 +112,6 @@ func (o *orm) Close() error {
 }
 
 // CreateJob creates the job and it's associated spec record.
-//
-// NOTE: This is not wrapped in a db transaction so if you call this, you should
-// use postgres.TransactionManager to create the transaction in the context.
 // Expects an unmarshaled job spec as the jobSpec argument i.e. output from ValidatedXX.
 // Returns a fully populated Job.
 func (o *orm) CreateJob(ctx context.Context, jobSpec *Job, p pipeline.Pipeline) (Job, error) {
@@ -132,7 +135,6 @@ func (o *orm) CreateJob(ctx context.Context, jobSpec *Job, p pipeline.Pipeline) 
 	}
 
 	err := postgres.SqlxTransaction(ctx, o.db, func(tx *sqlx.Tx) error {
-
 		// Autogenerate a job ID if not specified
 		if jobSpec.ExternalJobID == (uuid.UUID{}) {
 			jobSpec.ExternalJobID = uuid.NewV4()
@@ -141,9 +143,8 @@ func (o *orm) CreateJob(ctx context.Context, jobSpec *Job, p pipeline.Pipeline) 
 		switch jobSpec.Type {
 		case DirectRequest:
 			sql := `INSERT INTO direct_request_specs (contract_address, min_incoming_confirmations, requesters, min_contract_payment, evm_chain_id, created_at, updated_at)
-			VALUES (:contract_address, :min_incoming_confirmations, :requesters, :min_contract_payment, :evm_chain_id, now(), now())
-			RETURNING *;`
-			err := postgres.PrepareGet(tx, sql, &jobSpec.DirectRequestSpec, &jobSpec.DirectRequestSpec)
+			VALUES (:contract_address, :min_incoming_confirmations, :requesters, :min_contract_payment, :evm_chain_id, now(), now());`
+			_, err := tx.NamedExec(sql, jobSpec.DirectRequestSpec, jobSpec.DirectRequestSpec)
 			if err != nil {
 				return errors.Wrap(err, "failed to create DirectRequestSpec for jobSpec")
 			}
@@ -152,9 +153,8 @@ func (o *orm) CreateJob(ctx context.Context, jobSpec *Job, p pipeline.Pipeline) 
 			sql := `INSERT INTO flux_monitor_specs (contract_address, threshold, absolute_threshold, poll_timer_period, poll_timer_disabled, idle_timer_period, idle_timer_disabled 
 					drumbeat_schedule, drumbeat_random_delay, drumbeat_enabled, min_payment, evm_chain_id, created_at, updated_at)
 			VALUES (:contract_address, :threshold, :absolute_threshold, :poll_timer_period, :poll_timer_disabled, :idle_timer_period, :idle_timer_disabled 
-					:drumbeat_schedule, :drumbeat_random_delay, :drumbeat_enabled, :min_payment, :evm_chain_id, NOW(), NOW())
-			RETURNING *;`
-			err := postgres.PrepareGet(tx, sql, &jobSpec.FluxMonitorSpec, &jobSpec.FluxMonitorSpec)
+					:drumbeat_schedule, :drumbeat_random_delay, :drumbeat_enabled, :min_payment, :evm_chain_id, NOW(), NOW());`
+			err := postgres.PrepareGet(tx, sql, jobSpec.FluxMonitorSpec, jobSpec.FluxMonitorSpec)
 			if err != nil {
 				return errors.Wrap(err, "failed to create FluxMonitorSpec for jobSpec")
 			}
@@ -183,37 +183,35 @@ func (o *orm) CreateJob(ctx context.Context, jobSpec *Job, p pipeline.Pipeline) 
 					observation_timeout, blockchain_timeout, contract_config_tracker_subscribe_interval, contract_config_tracker_poll_interval, contract_config_confirmations, evm_chain_id,
 					created_at, updated_at)
 			VALUES (:contract_address, :p2p_peer_id, :p2p_bootstrap_peers, :is_bootstrap_peer, :encrypted_ocr_key_bundle_id, :transmitter_address,
-					:observation_timeout, :blockchain_timeout, :contract_config_tracker_subscribe_interval, :contract_config_tracker_poll_interval, :contract_config_confirmations, evm_chain_id,
-					NOW(), NOW())
-			RETURNING *;`
-			err := postgres.PrepareGet(tx, sql, &jobSpec.OffchainreportingOracleSpec, &jobSpec.OffchainreportingOracleSpec)
+					:observation_timeout, :blockchain_timeout, :contract_config_tracker_subscribe_interval, :contract_config_tracker_poll_interval, :contract_config_confirmations, :evm_chain_id,
+					NOW(), NOW());`
+			fmt.Println("BALLS before", jobSpec.OffchainreportingOracleSpec)
+			err := postgres.PrepareGet(tx, sql, jobSpec.OffchainreportingOracleSpec, jobSpec.OffchainreportingOracleSpec)
 			if err != nil {
 				return errors.Wrap(err, "failed to create OffchainreportingOracleSpec for jobSpec")
 			}
+			fmt.Println("BALLS after", jobSpec.OffchainreportingOracleSpec)
 			jobSpec.OffchainreportingOracleSpecID = &jobSpec.OffchainreportingOracleSpec.ID
 		case Keeper:
 			sql := `INSERT INTO keeper_specs (contract_address, from_address, evm_chain_id, created_at, updated_at)
-			VALUES (:contract_address, :from_address, :evm_chain_id, NOW(), NOW())
-			RETURNING *;`
-			err := postgres.PrepareGet(tx, sql, &jobSpec.KeeperSpec, &jobSpec.KeeperSpec)
+			VALUES (:contract_address, :from_address, :evm_chain_id, NOW(), NOW());`
+			err := postgres.PrepareGet(tx, sql, jobSpec.KeeperSpec, jobSpec.KeeperSpec)
 			if err != nil {
 				return errors.Wrap(err, "failed to create KeeperSpec for jobSpec")
 			}
 			jobSpec.KeeperSpecID = &jobSpec.KeeperSpec.ID
 		case Cron:
 			sql := `INSERT INTO cron_specs (cron_schedule, created_at, updated_at)
-			VALUES (:cron_schedule, NOW(), NOW())
-			RETURNING *;`
-			err := postgres.PrepareGet(tx, sql, &jobSpec.CronSpec, &jobSpec.CronSpec)
+			VALUES (:cron_schedule, NOW(), NOW());`
+			err := postgres.PrepareGet(tx, sql, jobSpec.CronSpec, jobSpec.CronSpec)
 			if err != nil {
 				return errors.Wrap(err, "failed to create CronSpec for jobSpec")
 			}
 			jobSpec.CronSpecID = &jobSpec.CronSpec.ID
 		case VRF:
 			sql := `INSERT INTO vrf_specs (coordinator_address, public_key, confirmations, evm_chain_id, created_at, updated_at)
-			VALUES (:coordinator_address, :public_key, :confirmations, :evm_chain_id, NOW(), NOW())
-			RETURNING *;`
-			err := postgres.PrepareGet(tx, sql, &jobSpec.VRFSpec, &jobSpec.VRFSpec)
+			VALUES (:coordinator_address, :public_key, :confirmations, :evm_chain_id, NOW(), NOW());`
+			err := postgres.PrepareGet(tx, sql, jobSpec.VRFSpec, jobSpec.VRFSpec)
 			pqErr, ok := err.(*pgconn.PgError)
 			if err != nil && ok && pqErr.Code == "23503" {
 				if pqErr.ConstraintName == "vrf_specs_public_key_fkey" {
@@ -226,9 +224,8 @@ func (o *orm) CreateJob(ctx context.Context, jobSpec *Job, p pipeline.Pipeline) 
 			jobSpec.VRFSpecID = &jobSpec.VRFSpec.ID
 		case Webhook:
 			sql := `INSERT INTO webhook_specs (created_at, updated_at)
-			VALUES (NOW(), NOW())
-			RETURNING *;`
-			err := postgres.PrepareGet(tx, sql, &jobSpec.WebhookSpec, &jobSpec.WebhookSpec)
+			VALUES (NOW(), NOW());`
+			err := postgres.PrepareGet(tx, sql, jobSpec.WebhookSpec, jobSpec.WebhookSpec)
 			if err != nil {
 				return errors.Wrap(err, "failed to create WebhookSpec for jobSpec")
 			}
@@ -237,10 +234,13 @@ func (o *orm) CreateJob(ctx context.Context, jobSpec *Job, p pipeline.Pipeline) 
 			for i := range jobSpec.WebhookSpec.ExternalInitiatorWebhookSpecs {
 				jobSpec.WebhookSpec.ExternalInitiatorWebhookSpecs[i].WebhookSpecID = jobSpec.WebhookSpec.ID
 			}
-			sqlEI := `INSERT INTO external_initiator_webhook_specs (external_initiator_id, webhook_spec_id, spec)
-			VALUES (:external_initiator_id, :webhook_spec_id, :spec)
-			RETURNING *;`
-			err = postgres.PrepareGet(tx, sqlEI, &jobSpec.WebhookSpec.ExternalInitiatorWebhookSpecs, &jobSpec.WebhookSpec.ExternalInitiatorWebhookSpecs)
+			sql = `INSERT INTO external_initiator_webhook_specs (external_initiator_id, webhook_spec_id, spec)
+			VALUES (:external_initiator_id, :webhook_spec_id, :spec);`
+			query, args, err := tx.BindNamed(sql, jobSpec.WebhookSpec.ExternalInitiatorWebhookSpecs)
+			if err != nil {
+				return err
+			}
+			err = tx.Select(&jobSpec.WebhookSpec.ExternalInitiatorWebhookSpecs, query, args...)
 			if err != nil {
 				return errors.Wrap(err, "failed to create WebhookSpec for jobSpec")
 			}
@@ -255,11 +255,10 @@ func (o *orm) CreateJob(ctx context.Context, jobSpec *Job, p pipeline.Pipeline) 
 		jobSpec.PipelineSpecID = pipelineSpecID
 
 		sql := `INSERT INTO jobs (pipeline_spec_id, offchainreporting_oracle_spec_id, name, schema_version, type, max_task_duration, direct_request_spec_id, flux_monitor_spec_id,
-				keeper_spec_id, cron_spec_id, vrf_spec_id, webhook_spec_id, external_job_id, created_at, updated_at)
+				keeper_spec_id, cron_spec_id, vrf_spec_id, webhook_spec_id, external_job_id, created_at)
 		VALUES (:pipeline_spec_id, :offchainreporting_oracle_spec_id, :name, :schema_version, :type, :max_task_duration, :direct_request_spec_id, :flux_monitor_spec_id,
-				:keeper_spec_id, :cron_spec_id, :vrf_spec_id, :webhook_spec_id, :external_job_id, NOW(), NOW())
-		RETURNING *;`
-		err = postgres.PrepareGet(tx, sql, &jobSpec, &jobSpec)
+				:keeper_spec_id, :cron_spec_id, :vrf_spec_id, :webhook_spec_id, :external_job_id, NOW());`
+		err = postgres.PrepareGet(tx, sql, jobSpec, jobSpec)
 		return errors.Wrap(err, "failed to create job")
 	})
 	if err != nil {
@@ -274,7 +273,7 @@ func (o *orm) DeleteJob(ctx context.Context, id int32) error {
 	postgres.EnsureNoTxInContext(ctx)
 	sql := `
 		WITH deleted_jobs AS (
-			DELETE FROM jobs WHERE id = ? RETURNING
+			DELETE FROM jobs WHERE id = $1 RETURNING
 				pipeline_spec_id,
 				offchainreporting_oracle_spec_id,
 				keeper_spec_id,
@@ -318,7 +317,7 @@ func (o *orm) RecordError(ctx context.Context, jobID int32, description string) 
 	sql := `INSERT INTO job_spec_errors (job_id, description, occurrences, created_at, updated_at)
 	VALUES ($1, $2, 1, NOW(), NOW())
 	ON CONFLICT (job_id, description) DO UPDATE SET
-	occurrences = job_spec_errors.occurrences + 1
+	occurrences = job_spec_errors.occurrences + 1,
 	updated_at = excluded.updated_at`
 	_, err := o.db.ExecContext(ctx, sql, jobID, description)
 	// Noop if the job has been deleted.

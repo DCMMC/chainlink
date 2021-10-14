@@ -106,7 +106,7 @@ func SqlxTransaction(ctx context.Context, q Queryer, fc func(tx *sqlx.Tx) error,
 func PrepareGet(q Queryer, sql string, dest interface{}, arg interface{}) error {
 	stmt, err := q.PrepareNamed(sql)
 	if err != nil {
-		return err
+		return errors.Wrap(err, "error preparing named statement")
 	}
-	return stmt.Get(dest, arg)
+	return errors.Wrap(stmt.Get(dest, arg), "error in get query")
 }

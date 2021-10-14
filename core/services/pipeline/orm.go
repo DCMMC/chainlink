@@ -244,7 +244,7 @@ func (o *orm) InsertFinishedRun(db postgres.Queryer, run Run, saveSuccessfulTask
 
 		query, args, e := tx.BindNamed(sql, run)
 		if e != nil {
-			return err
+			return e
 		}
 
 		if err = tx.GetContext(ctx, &run, query, args...); err != nil {
