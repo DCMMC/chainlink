@@ -314,6 +314,7 @@ func (o *orm) DeleteJob(ctx context.Context, id int32) error {
 }
 
 func (o *orm) RecordError(ctx context.Context, jobID int32, description string) {
+	postgres.EnsureNoTxInContext(ctx)
 	sql := `INSERT INTO job_spec_errors (job_id, description, occurrences, created_at, updated_at)
 	VALUES ($1, $2, 1, NOW(), NOW())
 	ON CONFLICT (job_id, description) DO UPDATE SET
@@ -331,6 +332,7 @@ func (o *orm) RecordError(ctx context.Context, jobID int32, description string) 
 }
 
 func (o *orm) DismissError(ctx context.Context, ID int32) error {
+	postgres.EnsureNoTxInContext(ctx)
 	res, err := o.db.ExecContext(ctx, "DELETE FROM job_spec_errors WHERE id = $1", ID)
 	if err != nil {
 		return errors.Wrap(err, "failed to dismiss error")
@@ -523,7 +525,7 @@ func (o *orm) preloadJobIDs(runs []pipeline.Run) error {
 	return nil
 }
 
-// PipelineRunsByJobID returns pipeline runs for a job, with spec and taskruns loaded, latest first
+// PipelineRuns returns pipeline runs for a job, with spec and taskruns loaded, latest first
 // If jobID is nil, returns all pipeline runs
 func (o *orm) PipelineRuns(jobID *int32, offset, size int) (runs []pipeline.Run, count int, err error) {
 	err = postgres.SqlxTransactionWithDefaultCtx(o.db, func(tx *sqlx.Tx) error {

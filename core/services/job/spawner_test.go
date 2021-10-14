@@ -77,7 +77,7 @@ func TestSpawner_CreateJobDeleteJob(t *testing.T) {
 		jobSpecA := cltest.MakeDirectRequestJobSpec(t)
 		jobSpecB := makeOCRJobSpec(t, address)
 
-		orm := job.NewTestORM(t, db, cc, pipeline.NewORM(db), keyStore)
+		orm := job.NewTestORM(t, postgres.UnwrapGormDB(db), cc, pipeline.NewORM(db), keyStore)
 		eventuallyA := cltest.NewAwaiter()
 		serviceA1 := new(mocks.Service)
 		serviceA2 := new(mocks.Service)
@@ -147,7 +147,7 @@ func TestSpawner_CreateJobDeleteJob(t *testing.T) {
 		serviceA1.On("Start").Return(nil).Once()
 		serviceA2.On("Start").Return(nil).Once().Run(func(mock.Arguments) { eventually.ItHappened() })
 
-		orm := job.NewTestORM(t, db, cc, pipeline.NewORM(db), keyStore)
+		orm := job.NewTestORM(t, postgres.UnwrapGormDB(db), cc, pipeline.NewORM(db), keyStore)
 		d := offchainreporting.NewDelegate(nil, orm, nil, nil, nil, monitoringEndpoint, cc, logger.TestLogger(t))
 		delegateA := &delegate{jobSpecA.Type, []job.Service{serviceA1, serviceA2}, 0, nil, d}
 		spawner := job.NewSpawner(orm, config, map[job.Type]job.Delegate{
@@ -182,7 +182,7 @@ func TestSpawner_CreateJobDeleteJob(t *testing.T) {
 		serviceA1.On("Start").Return(nil).Once()
 		serviceA2.On("Start").Return(nil).Once().Run(func(mock.Arguments) { eventuallyStart.ItHappened() })
 
-		orm := job.NewTestORM(t, db, cc, pipeline.NewORM(db), keyStore)
+		orm := job.NewTestORM(t, postgres.UnwrapGormDB(db), cc, pipeline.NewORM(db), keyStore)
 		d := offchainreporting.NewDelegate(nil, orm, nil, nil, nil, monitoringEndpoint, cc, logger.TestLogger(t))
 		delegateA := &delegate{jobSpecA.Type, []job.Service{serviceA1, serviceA2}, 0, nil, d}
 		spawner := job.NewSpawner(orm, config, map[job.Type]job.Delegate{

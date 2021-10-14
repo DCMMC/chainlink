@@ -179,7 +179,7 @@ type JobPipelineV2TestHelper struct {
 
 func NewJobPipelineV2(t testing.TB, cfg config.GeneralConfig, cc evm.ChainSet, db *gorm.DB, keyStore keystore.Master) JobPipelineV2TestHelper {
 	prm := pipeline.NewORM(db)
-	jrm := job.NewORM(db, cc, prm, keyStore, logger.TestLogger(t))
+	jrm := job.NewORM(postgres.UnwrapGormDB(db), cc, prm, keyStore, logger.TestLogger(t))
 	pr := pipeline.NewRunner(prm, cfg, cc, keyStore.Eth(), keyStore.VRF())
 	return JobPipelineV2TestHelper{
 		prm,
@@ -896,7 +896,7 @@ func WaitForPipeline(t testing.TB, nodeID int, jobID int32, expectedPipelineRuns
 
 	var pr []pipeline.Run
 	gomega.NewGomegaWithT(t).Eventually(func() bool {
-		prs, _, err := jo.PipelineRunsByJobID(jobID, 0, 1000)
+		prs, _, err := jo.PipelineRuns(&jobID, 0, 1000)
 		require.NoError(t, err)
 
 		var matched []pipeline.Run

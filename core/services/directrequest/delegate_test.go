@@ -24,6 +24,7 @@ import (
 	log_mocks "github.com/smartcontractkit/chainlink/core/services/log/mocks"
 	"github.com/smartcontractkit/chainlink/core/services/pipeline"
 	pipeline_mocks "github.com/smartcontractkit/chainlink/core/services/pipeline/mocks"
+	"github.com/smartcontractkit/chainlink/core/services/postgres"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
@@ -77,7 +78,7 @@ func NewDirectRequestUniverseWithConfig(t *testing.T, cfg *configtest.TestGenera
 	orm := pipeline.NewORM(db)
 
 	keyStore := cltest.NewKeyStore(t, db)
-	jobORM := job.NewORM(db, cc, orm, keyStore, logger.TestLogger(t))
+	jobORM := job.NewORM(postgres.UnwrapGormDB(db), cc, orm, keyStore, logger.TestLogger(t))
 
 	lggr := logger.TestLogger(t)
 	delegate := directrequest.NewDelegate(lggr, runner, orm, db, cc)

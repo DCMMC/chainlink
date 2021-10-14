@@ -25,6 +25,7 @@ import (
 	"github.com/smartcontractkit/chainlink/core/services/keystore/keys/ethkey"
 	"github.com/smartcontractkit/chainlink/core/services/offchainreporting"
 	"github.com/smartcontractkit/chainlink/core/services/pipeline"
+	"github.com/smartcontractkit/chainlink/core/services/postgres"
 	"github.com/smartcontractkit/chainlink/core/services/telemetry"
 	"github.com/smartcontractkit/chainlink/core/services/webhook"
 	"github.com/smartcontractkit/chainlink/core/store/models"
@@ -58,7 +59,7 @@ func TestRunner(t *testing.T) {
 	pipelineORM := pipeline.NewORM(db)
 	cc := evmtest.NewChainSet(t, evmtest.TestChainOpts{DB: db, Client: ethClient, GeneralConfig: config})
 	runner := pipeline.NewRunner(pipelineORM, config, cc, nil, nil)
-	jobORM := job.NewTestORM(t, db, cc, pipelineORM, keyStore)
+	jobORM := job.NewTestORM(t, postgres.UnwrapGormDB(db), cc, pipelineORM, keyStore)
 
 	runner.Start()
 	defer runner.Close()
@@ -811,7 +812,7 @@ observationSource   = """
 		_ = cltest.CreateJobRunViaExternalInitiatorV2(t, app, jobUUID, *eia, cltest.MustJSONMarshal(t, eiRequest))
 
 		pipelineORM := pipeline.NewORM(app.GetDB())
-		jobORM := job.NewTestORM(t, app.GetDB(), cc, pipelineORM, app.KeyStore)
+		jobORM := job.NewTestORM(t, app.GetSqlxDB(), cc, pipelineORM, app.KeyStore)
 
 		// Trigger v2/resume
 		select {
@@ -846,7 +847,7 @@ observationSource   = """
 		_ = cltest.CreateJobRunViaExternalInitiatorV2(t, app, jobUUID, *eia, cltest.MustJSONMarshal(t, eiRequest))
 
 		pipelineORM := pipeline.NewORM(app.GetDB())
-		jobORM := job.NewTestORM(t, app.GetDB(), cc, pipelineORM, app.KeyStore)
+		jobORM := job.NewTestORM(t, app.GetSqlxDB(), cc, pipelineORM, app.KeyStore)
 
 		// Trigger v2/resume
 		select {

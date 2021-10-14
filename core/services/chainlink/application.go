@@ -63,6 +63,7 @@ type Application interface {
 	GetLogger() logger.Logger
 	GetHealthChecker() health.Checker
 	GetDB() *gorm.DB
+	GetSqlxDB() *sqlx.DB
 	GetConfig() config.GeneralConfig
 	SetLogLevel(ctx context.Context, lvl zapcore.Level) error
 	GetKeyStore() keystore.Master
@@ -648,6 +649,10 @@ func (app *ChainlinkApplication) GetEventBroadcaster() postgres.EventBroadcaster
 
 func (app *ChainlinkApplication) GetDB() *gorm.DB {
 	return app.gormDB
+}
+
+func (app *ChainlinkApplication) GetSqlxDB() *sqlx.DB {
+	return app.sqlxDB
 }
 
 // Returns the configuration to use for creating and authenticating

@@ -3,17 +3,15 @@
 package mocks
 
 import (
-	context "context"
-
-	gorm "gorm.io/gorm"
-
-	mock "github.com/stretchr/testify/mock"
-
 	models "github.com/smartcontractkit/chainlink/core/store/models"
+	mock "github.com/stretchr/testify/mock"
+	gorm "gorm.io/gorm"
 
 	pipeline "github.com/smartcontractkit/chainlink/core/services/pipeline"
 
 	postgres "github.com/smartcontractkit/chainlink/core/services/postgres"
+
+	sqlx "github.com/smartcontractkit/sqlx"
 
 	time "time"
 
@@ -39,20 +37,20 @@ func (_m *ORM) CreateRun(db postgres.Queryer, run *pipeline.Run) error {
 	return r0
 }
 
-// CreateSpec provides a mock function with given fields: ctx, tx, _a2, maxTaskTimeout
-func (_m *ORM) CreateSpec(ctx context.Context, tx *gorm.DB, _a2 pipeline.Pipeline, maxTaskTimeout models.Interval) (int32, error) {
-	ret := _m.Called(ctx, tx, _a2, maxTaskTimeout)
+// CreateSpec provides a mock function with given fields: tx, _a1, maxTaskTimeout
+func (_m *ORM) CreateSpec(tx *sqlx.Tx, _a1 pipeline.Pipeline, maxTaskTimeout models.Interval) (int32, error) {
+	ret := _m.Called(tx, _a1, maxTaskTimeout)
 
 	var r0 int32
-	if rf, ok := ret.Get(0).(func(context.Context, *gorm.DB, pipeline.Pipeline, models.Interval) int32); ok {
-		r0 = rf(ctx, tx, _a2, maxTaskTimeout)
+	if rf, ok := ret.Get(0).(func(*sqlx.Tx, pipeline.Pipeline, models.Interval) int32); ok {
+		r0 = rf(tx, _a1, maxTaskTimeout)
 	} else {
 		r0 = ret.Get(0).(int32)
 	}
 
 	var r1 error
-	if rf, ok := ret.Get(1).(func(context.Context, *gorm.DB, pipeline.Pipeline, models.Interval) error); ok {
-		r1 = rf(ctx, tx, _a2, maxTaskTimeout)
+	if rf, ok := ret.Get(1).(func(*sqlx.Tx, pipeline.Pipeline, models.Interval) error); ok {
+		r1 = rf(tx, _a1, maxTaskTimeout)
 	} else {
 		r1 = ret.Error(1)
 	}

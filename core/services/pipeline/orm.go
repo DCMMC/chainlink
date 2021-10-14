@@ -20,7 +20,7 @@ var (
 //go:generate mockery --name ORM --output ./mocks/ --case=underscore
 
 type ORM interface {
-	CreateSpec(tx *sqlx.Tx, pipeline Pipeline, maxTaskTimeout models.Interval) (int32, error)
+	CreateSpec(q postgres.Queryer, pipeline Pipeline, maxTaskTimeout models.Interval) (int32, error)
 	CreateRun(db postgres.Queryer, run *Run) (err error)
 	DeleteRun(id int64) error
 	StoreRun(db postgres.Queryer, run *Run) (restart bool, err error)
@@ -43,11 +43,11 @@ func NewORM(db *gorm.DB) *orm {
 	return &orm{db}
 }
 
-func (o *orm) CreateSpec(tx *sqlx.Tx, pipeline Pipeline, maxTaskDuration models.Interval) (id int32, err error) {
+func (o *orm) CreateSpec(q postgres.Queryer, pipeline Pipeline, maxTaskDuration models.Interval) (id int32, err error) {
 	sql := `INSERT INTO pipeline_specs (dot_dag_source, max_task_duration, created_at)
 	VALUES ($1, $2, NOW())
 	RETURNING id;`
-	err = tx.QueryRowx(sql, pipeline.Source, maxTaskDuration).Scan(&id)
+	err = q.QueryRowx(sql, pipeline.Source, maxTaskDuration).Scan(&id)
 	return id, errors.WithStack(err)
 }
 

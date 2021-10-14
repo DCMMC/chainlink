@@ -197,42 +197,12 @@ func (_m *ORM) FindJobs(offset int, limit int) ([]job.Job, int, error) {
 	return r0, r1, r2
 }
 
-// PipelineRuns provides a mock function with given fields: offset, size
-func (_m *ORM) PipelineRuns(offset int, size int) ([]pipeline.Run, int, error) {
-	ret := _m.Called(offset, size)
-
-	var r0 []pipeline.Run
-	if rf, ok := ret.Get(0).(func(int, int) []pipeline.Run); ok {
-		r0 = rf(offset, size)
-	} else {
-		if ret.Get(0) != nil {
-			r0 = ret.Get(0).([]pipeline.Run)
-		}
-	}
-
-	var r1 int
-	if rf, ok := ret.Get(1).(func(int, int) int); ok {
-		r1 = rf(offset, size)
-	} else {
-		r1 = ret.Get(1).(int)
-	}
-
-	var r2 error
-	if rf, ok := ret.Get(2).(func(int, int) error); ok {
-		r2 = rf(offset, size)
-	} else {
-		r2 = ret.Error(2)
-	}
-
-	return r0, r1, r2
-}
-
-// PipelineRunsByJobID provides a mock function with given fields: jobID, offset, size
-func (_m *ORM) PipelineRunsByJobID(jobID int32, offset int, size int) ([]pipeline.Run, int, error) {
+// PipelineRuns provides a mock function with given fields: jobID, offset, size
+func (_m *ORM) PipelineRuns(jobID *int32, offset int, size int) ([]pipeline.Run, int, error) {
 	ret := _m.Called(jobID, offset, size)
 
 	var r0 []pipeline.Run
-	if rf, ok := ret.Get(0).(func(int32, int, int) []pipeline.Run); ok {
+	if rf, ok := ret.Get(0).(func(*int32, int, int) []pipeline.Run); ok {
 		r0 = rf(jobID, offset, size)
 	} else {
 		if ret.Get(0) != nil {
@@ -241,14 +211,14 @@ func (_m *ORM) PipelineRunsByJobID(jobID int32, offset int, size int) ([]pipelin
 	}
 
 	var r1 int
-	if rf, ok := ret.Get(1).(func(int32, int, int) int); ok {
+	if rf, ok := ret.Get(1).(func(*int32, int, int) int); ok {
 		r1 = rf(jobID, offset, size)
 	} else {
 		r1 = ret.Get(1).(int)
 	}
 
 	var r2 error
-	if rf, ok := ret.Get(2).(func(int32, int, int) error); ok {
+	if rf, ok := ret.Get(2).(func(*int32, int, int) error); ok {
 		r2 = rf(jobID, offset, size)
 	} else {
 		r2 = ret.Error(2)

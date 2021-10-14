@@ -40,7 +40,7 @@ func TestORM(t *testing.T) {
 	pipelineORM := pipeline.NewORM(db)
 
 	cc := evmtest.NewChainSet(t, evmtest.TestChainOpts{DB: db, GeneralConfig: config})
-	orm := job.NewTestORM(t, db, cc, pipelineORM, keyStore)
+	orm := job.NewTestORM(t, postgres.UnwrapGormDB(db), cc, pipelineORM, keyStore)
 
 	_, bridge := cltest.NewBridgeType(t, "voter_turnout", "http://blah.com")
 	require.NoError(t, db.Create(bridge).Error)
@@ -165,7 +165,7 @@ func TestORM_DeleteJob_DeletesAssociatedRecords(t *testing.T) {
 
 	pipelineORM := pipeline.NewORM(db)
 	cc := evmtest.NewChainSet(t, evmtest.TestChainOpts{DB: db, GeneralConfig: config})
-	orm := job.NewTestORM(t, db, cc, pipelineORM, keyStore)
+	orm := job.NewTestORM(t, postgres.UnwrapGormDB(db), cc, pipelineORM, keyStore)
 
 	t.Run("it deletes records for offchainreporting jobs", func(t *testing.T) {
 		_, bridge := cltest.NewBridgeType(t, "voter_turnout", "http://blah.com")
@@ -266,7 +266,7 @@ func Test_FindJob(t *testing.T) {
 
 	pipelineORM := pipeline.NewORM(db)
 	cc := evmtest.NewChainSet(t, evmtest.TestChainOpts{DB: db, GeneralConfig: config})
-	orm := job.NewTestORM(t, db, cc, pipelineORM, keyStore)
+	orm := job.NewTestORM(t, postgres.UnwrapGormDB(db), cc, pipelineORM, keyStore)
 
 	_, bridge := cltest.NewBridgeType(t, "voter_turnout", "http://blah.com")
 	require.NoError(t, db.Create(bridge).Error)
@@ -318,7 +318,7 @@ func Test_FindPipelineRuns(t *testing.T) {
 
 	pipelineORM := pipeline.NewORM(db)
 	cc := evmtest.NewChainSet(t, evmtest.TestChainOpts{DB: db, GeneralConfig: config})
-	orm := job.NewTestORM(t, db, cc, pipelineORM, keyStore)
+	orm := job.NewTestORM(t, postgres.UnwrapGormDB(db), cc, pipelineORM, keyStore)
 
 	_, bridge := cltest.NewBridgeType(t, "voter_turnout", "http://blah.com")
 	require.NoError(t, db.Create(bridge).Error)
@@ -339,7 +339,7 @@ func Test_FindPipelineRuns(t *testing.T) {
 	require.NoError(t, err)
 
 	t.Run("with no pipeline runs", func(t *testing.T) {
-		runs, count, err := orm.PipelineRuns(0, 10)
+		runs, count, err := orm.PipelineRuns(nil, 0, 10)
 		require.NoError(t, err)
 		assert.Equal(t, count, 0)
 		assert.Empty(t, runs)
@@ -348,7 +348,7 @@ func Test_FindPipelineRuns(t *testing.T) {
 	t.Run("with a pipeline run", func(t *testing.T) {
 		run := mustInsertPipelineRun(t, db, ocrJob)
 
-		runs, count, err := orm.PipelineRuns(0, 10)
+		runs, count, err := orm.PipelineRuns(nil, 0, 10)
 		require.NoError(t, err)
 
 		assert.Equal(t, count, 1)
@@ -375,7 +375,7 @@ func Test_PipelineRunsByJobID(t *testing.T) {
 
 	pipelineORM := pipeline.NewORM(db)
 	cc := evmtest.NewChainSet(t, evmtest.TestChainOpts{DB: db, GeneralConfig: config})
-	orm := job.NewTestORM(t, db, cc, pipelineORM, keyStore)
+	orm := job.NewTestORM(t, postgres.UnwrapGormDB(db), cc, pipelineORM, keyStore)
 
 	_, bridge := cltest.NewBridgeType(t, "voter_turnout", "http://blah.com")
 	require.NoError(t, db.Create(bridge).Error)
@@ -396,7 +396,7 @@ func Test_PipelineRunsByJobID(t *testing.T) {
 	require.NoError(t, err)
 
 	t.Run("with no pipeline runs", func(t *testing.T) {
-		runs, count, err := orm.PipelineRunsByJobID(ocrJob.ID, 0, 10)
+		runs, count, err := orm.PipelineRuns(&ocrJob.ID, 0, 10)
 		require.NoError(t, err)
 		assert.Equal(t, count, 0)
 		assert.Empty(t, runs)
@@ -405,7 +405,7 @@ func Test_PipelineRunsByJobID(t *testing.T) {
 	t.Run("with a pipeline run", func(t *testing.T) {
 		run := mustInsertPipelineRun(t, db, ocrJob)
 
-		runs, count, err := orm.PipelineRunsByJobID(ocrJob.ID, 0, 10)
+		runs, count, err := orm.PipelineRuns(&ocrJob.ID, 0, 10)
 		require.NoError(t, err)
 
 		assert.Equal(t, count, 1)
