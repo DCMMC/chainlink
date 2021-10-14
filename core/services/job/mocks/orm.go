@@ -167,8 +167,8 @@ func (_m *ORM) FindJobTx(id int32) (job.Job, error) {
 	return r0, r1
 }
 
-// JobsV2 provides a mock function with given fields: offset, limit
-func (_m *ORM) JobsV2(offset int, limit int) ([]job.Job, int, error) {
+// FindJobs provides a mock function with given fields: offset, limit
+func (_m *ORM) FindJobs(offset int, limit int) ([]job.Job, int, error) {
 	ret := _m.Called(offset, limit)
 
 	var r0 []job.Job

@@ -3,7 +3,6 @@ package job
 import (
 	"context"
 	"fmt"
-	"strings"
 	"time"
 
 	"github.com/smartcontractkit/chainlink/core/chains/evm"
@@ -15,7 +14,6 @@ import (
 	"github.com/smartcontractkit/sqlx"
 	"go.uber.org/multierr"
 	"gorm.io/gorm"
-	"gorm.io/gorm/clause"
 
 	"github.com/jackc/pgconn"
 	"github.com/pkg/errors"
@@ -31,13 +29,9 @@ var (
 
 //go:generate mockery --name ORM --output ./mocks/ --case=underscore
 
-var (
-	ErrViolatesForeignKeyConstraint = errors.New("violates foreign key constraint")
-)
-
 type ORM interface {
 	CreateJob(ctx context.Context, jobSpec *Job, pipeline pipeline.Pipeline) (Job, error)
-	JobsV2(offset, limit int) ([]Job, int, error)
+	FindJobs(offset, limit int) ([]Job, int, error)
 	FindJobTx(id int32) (Job, error)
 	FindJob(ctx context.Context, id int32) (Job, error)
 	FindJobByExternalJobID(ctx context.Context, uuid uuid.UUID) (Job, error)
@@ -46,8 +40,7 @@ type ORM interface {
 	RecordError(ctx context.Context, jobID int32, description string)
 	DismissError(ctx context.Context, errorID int32) error
 	Close() error
-	PipelineRuns(offset, size int) ([]pipeline.Run, int, error)
-	PipelineRunsByJobID(jobID int32, offset, size int) ([]pipeline.Run, int, error)
+	PipelineRuns(jobID *int32, offset, size int) ([]pipeline.Run, int, error)
 }
 
 type orm struct {
@@ -76,23 +69,28 @@ func NewORM(
 	}
 }
 
-func LoadAllJobTypes(tx *sqlx.Tx, jobs []Job) error {
-	for i, job := range jobs {
-		err := multierr.Combine(
-			loadJobType(tx, &jobs[i].PipelineSpec, "pipeline_specs", &job.PipelineSpecID),
-			loadJobType(tx, &jobs[i].FluxMonitorSpec, "flux_monitor_specs", job.FluxMonitorSpecID),
-			loadJobType(tx, &jobs[i].DirectRequestSpec, "direct_request_specs", job.DirectRequestSpecID),
-			loadJobType(tx, &jobs[i].OffchainreportingOracleSpec, "offchainreporting_oracle_specs", job.OffchainreportingOracleSpecID),
-			loadJobType(tx, &jobs[i].KeeperSpec, "keeper_specs", job.KeeperSpecID),
-			loadJobType(tx, &jobs[i].CronSpec, "cron_specs", job.CronSpecID),
-			loadJobType(tx, &jobs[i].WebhookSpec, "webhook_specs", job.WebhookSpecID),
-			loadJobType(tx, &jobs[i].VRFSpec, "vrf_specs", job.VRFSpecID),
-		)
+// NOTE: N+1 query
+func LoadAllJobsTypes(tx *sqlx.Tx, jobs []Job) error {
+	for i := range jobs {
+		err := LoadAllJobTypes(tx, &jobs[i])
 		if err != nil {
 			return err
 		}
 	}
 	return nil
+}
+
+func LoadAllJobTypes(tx *sqlx.Tx, job *Job) error {
+	return multierr.Combine(
+		loadJobType(tx, job.PipelineSpec, "pipeline_specs", &job.PipelineSpecID),
+		loadJobType(tx, job.FluxMonitorSpec, "flux_monitor_specs", job.FluxMonitorSpecID),
+		loadJobType(tx, job.DirectRequestSpec, "direct_request_specs", job.DirectRequestSpecID),
+		loadJobType(tx, job.OffchainreportingOracleSpec, "offchainreporting_oracle_specs", job.OffchainreportingOracleSpecID),
+		loadJobType(tx, job.KeeperSpec, "keeper_specs", job.KeeperSpecID),
+		loadJobType(tx, job.CronSpec, "cron_specs", job.CronSpecID),
+		loadJobType(tx, job.WebhookSpec, "webhook_specs", job.WebhookSpecID),
+		loadJobType(tx, job.VRFSpec, "vrf_specs", job.VRFSpecID),
+	)
 }
 
 func loadJobType(tx *sqlx.Tx, dest interface{}, table string, id *int32) error {
@@ -114,6 +112,7 @@ func (o *orm) Close() error {
 // Expects an unmarshaled job spec as the jobSpec argument i.e. output from ValidatedXX.
 // Returns a fully populated Job.
 func (o *orm) CreateJob(ctx context.Context, jobSpec *Job, p pipeline.Pipeline) (Job, error) {
+	postgres.EnsureNoTxInContext(ctx)
 	var jb Job
 	for _, task := range p.Tasks {
 		if task.Type() == pipeline.TaskTypeBridge {
@@ -261,9 +260,7 @@ func (o *orm) CreateJob(ctx context.Context, jobSpec *Job, p pipeline.Pipeline) 
 				:keeper_spec_id, :cron_spec_id, :vrf_spec_id, :webhook_spec_id, :external_job_id, NOW(), NOW())
 		RETURNING *;`
 		err = postgres.PrepareGet(tx, sql, &jobSpec, &jobSpec)
-		if err != nil {
-			return errors.Wrap(err, "failed to create job")
-		}
+		return errors.Wrap(err, "failed to create job")
 	})
 	if err != nil {
 		return jb, err
@@ -275,8 +272,7 @@ func (o *orm) CreateJob(ctx context.Context, jobSpec *Job, p pipeline.Pipeline) 
 // DeleteJob removes a job
 func (o *orm) DeleteJob(ctx context.Context, id int32) error {
 	postgres.EnsureNoTxInContext(ctx)
-	postgres.SqlxTransaction(ctx, o.db, func(tx *sqlx.Tx) error {
-		return tx.Exec(`
+	sql := `
 		WITH deleted_jobs AS (
 			DELETE FROM jobs WHERE id = ? RETURNING
 				pipeline_spec_id,
@@ -309,56 +305,61 @@ func (o *orm) DeleteJob(ctx context.Context, id int32) error {
 		deleted_dr_specs AS (
 			DELETE FROM direct_request_specs WHERE id IN (SELECT direct_request_spec_id FROM deleted_jobs)
 		)
-		DELETE FROM pipeline_specs WHERE id IN (SELECT pipeline_spec_id FROM deleted_jobs)
-	`, id).Error
-		if err != nil {
-			return errors.Wrap(err, "DeleteJob failed to delete job")
-		}
-	})
-
+		DELETE FROM pipeline_specs WHERE id IN (SELECT pipeline_spec_id FROM deleted_jobs)`
+	_, err := o.db.ExecContext(ctx, sql, id)
+	if err != nil {
+		return errors.Wrap(err, "DeleteJob failed to delete job")
+	}
 	return nil
 }
 
 func (o *orm) RecordError(ctx context.Context, jobID int32, description string) {
-	pse := SpecError{JobID: jobID, Description: description, Occurrences: 1}
-	err := o.db.WithContext(ctx).
-		Clauses(clause.OnConflict{
-			Columns: []clause.Column{{Name: "job_id"}, {Name: "description"}},
-			DoUpdates: clause.Assignments(map[string]interface{}{
-				"occurrences": gorm.Expr("job_spec_errors.occurrences + 1"),
-				"updated_at":  gorm.Expr("excluded.updated_at"),
-			}),
-		}).
-		Create(&pse).
-		Error
+	sql := `INSERT INTO job_spec_errors (job_id, description, occurrences, created_at, updated_at)
+	VALUES ($1, $2, 1, NOW(), NOW())
+	ON CONFLICT (job_id, description) DO UPDATE SET
+	occurrences = job_spec_errors.occurrences + 1
+	updated_at = excluded.updated_at`
+	_, err := o.db.ExecContext(ctx, sql, jobID, description)
 	// Noop if the job has been deleted.
-	if err != nil && strings.Contains(err.Error(), ErrViolatesForeignKeyConstraint.Error()) {
-		return
+	pqErr, ok := err.(*pgconn.PgError)
+	if err != nil && ok && pqErr.Code == "23503" {
+		if pqErr.ConstraintName == "job_spec_errors_v2_job_id_fkey" {
+			return
+		}
 	}
 	o.lggr.ErrorIf(err, fmt.Sprintf("Error creating SpecError %v", description))
 }
 
 func (o *orm) DismissError(ctx context.Context, ID int32) error {
-	result := o.db.Exec("DELETE FROM job_spec_errors WHERE id = ?", ID)
-	if result.Error != nil {
-		return result.Error
-	} else if result.RowsAffected == 0 {
+	res, err := o.db.ExecContext(ctx, "DELETE FROM job_spec_errors WHERE id = $1", ID)
+	if err != nil {
+		return errors.Wrap(err, "failed to dismiss error")
+	}
+	n, err := res.RowsAffected()
+	if err != nil {
+		return errors.Wrap(err, "failed to dismiss error")
+	}
+	if n == 0 {
 		return gorm.ErrRecordNotFound
 	}
 	return nil
 }
 
-func (o *orm) JobsV2(offset, limit int) ([]Job, int, error) {
-	var count int64
-	var jobs []Job
-	err := postgres.SqlxTransactionWithDefaultCtx(o.db, func(tx *sqlx.Tx) error {
-		sql = `SELECT * FROM jobs ORDER BY id ASC OFFSET $1 LIMIT $2`
-		err := tx.Select(&jobs, sql, offset, limit)
+func (o *orm) FindJobs(offset, limit int) (jobs []Job, count int, err error) {
+	err = postgres.SqlxTransactionWithDefaultCtx(o.db, func(tx *sqlx.Tx) error {
+		sql := `SELECT count(*) FROM jobs;`
+		err = tx.QueryRowx(sql).Scan(&count)
 		if err != nil {
 			return err
 		}
 
-		err = LoadAllJobTypes(tx, &jobs)
+		sql = `SELECT * FROM jobs ORDER BY id ASC OFFSET $1 LIMIT $2;`
+		err = tx.Select(&jobs, sql, offset, limit)
+		if err != nil {
+			return err
+		}
+
+		err = LoadAllJobsTypes(tx, jobs)
 		if err != nil {
 			return err
 		}
@@ -404,80 +405,83 @@ func LoadDynamicConfigVars(cfg OCRSpecConfig, os OffchainReportingOracleSpec) *O
 }
 
 func (o *orm) FindJobTx(id int32) (Job, error) {
-	var jb Job
-	var err error
-	txm := postgres.NewGormTransactionManager(o.db)
-	err = txm.Transact(func(ctx context.Context) error {
-		jb, err = o.FindJob(ctx, id)
-		return err
-	})
-	return jb, err
+	ctx, cancel := postgres.DefaultQueryCtx()
+	defer cancel()
+	return o.FindJob(ctx, id)
 }
 
 // FindJob returns job by ID
 func (o *orm) FindJob(ctx context.Context, id int32) (jb Job, err error) {
-	tx := postgres.TxFromContext(ctx, o.db)
-	err = PreloadAllJobTypes(tx).
-		Preload("JobSpecErrors").
-		First(&jb, "jobs.id = ?", id).
-		Error
-	if err != nil {
-		return jb, err
-	}
-
-	if jb.OffchainreportingOracleSpec != nil {
-		var ch evm.Chain
-		ch, err = o.chainSet.Get(jb.OffchainreportingOracleSpec.EVMChainID.ToInt())
-		if err != nil {
-			return jb, err
-		}
-		jb.OffchainreportingOracleSpec = LoadDynamicConfigVars(ch.Config(), *jb.OffchainreportingOracleSpec)
-	}
-	return jb, err
+	return o.findJob(ctx, "id", id)
 }
 
 func (o *orm) FindJobByExternalJobID(ctx context.Context, externalJobID uuid.UUID) (jb Job, err error) {
-	tx := postgres.TxFromContext(ctx, o.db)
-	err = PreloadAllJobTypes(tx).
-		Preload("JobSpecErrors").
-		First(&jb, "jobs.external_job_id = ?", externalJobID).
-		Error
-	if err != nil {
-		return jb, err
-	}
+	return o.findJob(ctx, "external_job_id", externalJobID)
+}
 
-	if jb.OffchainreportingOracleSpec != nil {
-		var ch evm.Chain
-		ch, err = o.chainSet.Get(jb.OffchainreportingOracleSpec.EVMChainID.ToInt())
+func (o *orm) findJob(ctx context.Context, col string, arg interface{}) (jb Job, err error) {
+	postgres.EnsureNoTxInContext(ctx)
+
+	err = postgres.SqlxTransaction(ctx, o.db, func(tx *sqlx.Tx) error {
+		sql := fmt.Sprintf(`SELECT * FROM jobs WHERE %s = $1 LIMIT 1`, col)
+		err = tx.Get(&jb, sql, arg)
 		if err != nil {
-			return jb, err
+			return errors.Wrap(err, "failed to load job")
 		}
-		jb.OffchainreportingOracleSpec = LoadDynamicConfigVars(ch.Config(), *jb.OffchainreportingOracleSpec)
-	}
+
+		if err := LoadAllJobTypes(tx, &jb); err != nil {
+			return err
+		}
+
+		if jb.OffchainreportingOracleSpec != nil {
+			var ch evm.Chain
+			ch, err = o.chainSet.Get(jb.OffchainreportingOracleSpec.EVMChainID.ToInt())
+			if err != nil {
+				return err
+			}
+			jb.OffchainreportingOracleSpec = LoadDynamicConfigVars(ch.Config(), *jb.OffchainreportingOracleSpec)
+		}
+		return nil
+	})
 	return jb, err
 }
 
-func (o *orm) FindJobIDsWithBridge(name string) ([]int32, error) {
-	var jobs []Job
-	err := o.db.Preload("PipelineSpec").Find(&jobs).Error
-	if err != nil {
-		return nil, err
-	}
-	var jids []int32
-	for _, job := range jobs {
-		p, err := pipeline.Parse(job.PipelineSpec.DotDagSource)
+func (o *orm) FindJobIDsWithBridge(name string) (jids []int32, err error) {
+	err = postgres.SqlxTransactionWithDefaultCtx(o.db, func(tx *sqlx.Tx) error {
+		sql := `SELECT jobs.id, dot_dag_source FROM jobs JOIN pipeline_specs ON pipeline_specs.id = jobs.pipeline_spec_id WHERE dot_dag_source ILIKE "%" || $1 || "%" ORDER BY id`
+		rows, err := tx.Query(sql, name)
 		if err != nil {
-			return nil, err
+			return err
 		}
-		for _, task := range p.Tasks {
-			if task.Type() == pipeline.TaskTypeBridge {
-				if task.(*pipeline.BridgeTask).Name == name {
-					jids = append(jids, job.ID)
+		defer rows.Close()
+		var ids []int32
+		var sources []string
+		for rows.Next() {
+			var id int32
+			var source string
+			if err := rows.Scan(&id, &source); err != nil {
+				return err
+			}
+			ids = append(jids, id)
+			sources = append(sources, source)
+		}
+
+		for i, id := range ids {
+			p, err := pipeline.Parse(sources[i])
+			if err != nil {
+				return errors.Wrapf(err, "could not parse dag for job %d", id)
+			}
+			for _, task := range p.Tasks {
+				if task.Type() == pipeline.TaskTypeBridge {
+					if task.(*pipeline.BridgeTask).Name == name {
+						jids = append(jids, id)
+					}
 				}
 			}
 		}
-	}
-	return jids, nil
+		return nil
+	})
+	return jids, errors.Wrap(err, "FindJobIDsWithBridge failed")
 }
 
 // Preload PipelineSpec.JobID for each Run
@@ -486,8 +490,6 @@ func (o *orm) preloadJobIDs(runs []pipeline.Run) error {
 	if len(runs) == 0 {
 		return nil
 	}
-
-	db := postgres.UnwrapGormDB(o.db)
 
 	ids := make([]int32, 0, len(runs))
 	for _, run := range runs {
@@ -500,12 +502,12 @@ func (o *orm) preloadJobIDs(runs []pipeline.Run) error {
 	if err != nil {
 		return err
 	}
-	query = db.Rebind(query)
+	query = o.db.Rebind(query)
 	var results []struct {
 		ID             int32
 		PipelineSpecID int32
 	}
-	if err := db.Select(&results, query, args...); err != nil {
+	if err := o.db.Select(&results, query, args...); err != nil {
 		return err
 	}
 
@@ -521,73 +523,72 @@ func (o *orm) preloadJobIDs(runs []pipeline.Run) error {
 	return nil
 }
 
-// PipelineRunsByJobID returns all pipeline runs
-func (o *orm) PipelineRuns(offset, size int) ([]pipeline.Run, int, error) {
-	var pipelineRuns []pipeline.Run
-	var count int64
-	err := o.db.
-		Model(pipeline.Run{}).
-		Count(&count).
-		Error
+// PipelineRunsByJobID returns pipeline runs for a job, with spec and taskruns loaded, latest first
+// If jobID is nil, returns all pipeline runs
+func (o *orm) PipelineRuns(jobID *int32, offset, size int) (runs []pipeline.Run, count int, err error) {
+	err = postgres.SqlxTransactionWithDefaultCtx(o.db, func(tx *sqlx.Tx) error {
+		var args []interface{}
+		var where string
+		if jobID != nil {
+			where = " WHERE jobs.id = $1"
+			args = append(args, *jobID)
+		}
+		sql := fmt.Sprintf(`SELECT count(*) FROM pipeline_runs INNER JOIN jobs ON pipeline_runs.pipeline_spec_id = jobs.pipeline_spec_id%s`, where)
+		if err = tx.QueryRowx(sql, args...).Scan(&count); err != nil {
+			return err
+		}
 
-	if err != nil {
-		return pipelineRuns, 0, err
-	}
+		sql = fmt.Sprintf(`SELECT pipeline_runs.*, jobs.id AS job_id FROM pipeline_runs INNER JOIN jobs ON pipeline_runs.pipeline_spec_id = jobs.pipeline_spec_id%s
+		ORDER BY pipeline_runs.created_at DESC, pipeline_runs.id DESC
+		OFFSET $2 LIMIT $3
+		;`, args...)
 
-	err = o.db.
-		Preload("PipelineSpec").
-		Preload("PipelineTaskRuns", func(db *gorm.DB) *gorm.DB {
-			return db.
-				Order("created_at ASC, id ASC")
-		}).
-		Limit(size).
-		Offset(offset).
-		Order("created_at DESC, id DESC").
-		Find(&pipelineRuns).
-		Error
+		if err = tx.Select(runs, sql, jobID, offset, size); err != nil {
+			return err
+		}
 
-	if err != nil {
-		return pipelineRuns, int(count), err
-	}
+		// Postload PipelineSpecs
+		// TODO: We should pull this out into a generic preload function once go has generics
+		specM := make(map[int32]pipeline.Spec)
+		for _, run := range runs {
+			if _, exists := specM[run.PipelineSpecID]; !exists {
+				specM[run.PipelineSpecID] = pipeline.Spec{}
+			}
+		}
+		specIDs := make([]int32, len(specM))
+		for specID := range specM {
+			specIDs = append(specIDs, specID)
+		}
+		sql = `SELECT * FROM pipeline_specs WHERE id = ANY($1);`
+		var specs []pipeline.Spec
+		if err = o.db.Select(&specs, sql, specIDs); err != nil {
+			return err
+		}
+		for _, spec := range specs {
+			specM[spec.ID] = spec
+		}
+		runM := make(map[int64]*pipeline.Run, len(runs))
+		for i, run := range runs {
+			runs[i].PipelineSpec = specM[run.PipelineSpecID]
+			runM[run.ID] = &runs[i]
+		}
 
-	err = o.preloadJobIDs(pipelineRuns)
+		// Postload PipelineTaskRuns
+		runIDs := make([]int64, len(runs))
+		for i, run := range runs {
+			runIDs[i] = run.ID
+		}
+		var taskRuns []pipeline.TaskRun
+		sql = `SELECT * FROM pipeline_task_runs WHERE pipeline_run_id = ANY($1) ORDER BY pipeline_run_id, created_at, id;`
+		if err = tx.Select(&taskRuns, sql, runIDs); err != nil {
+			return err
+		}
+		for _, taskRun := range taskRuns {
+			run := runM[taskRun.PipelineRunID]
+			run.PipelineTaskRuns = append(run.PipelineTaskRuns, taskRun)
+		}
+		return nil
+	})
 
-	return pipelineRuns, int(count), err
-}
-
-// PipelineRunsByJobID returns pipeline runs for a job
-func (o *orm) PipelineRunsByJobID(jobID int32, offset, size int) ([]pipeline.Run, int, error) {
-	var pipelineRuns []pipeline.Run
-	var count int64
-	err := o.db.
-		Model(pipeline.Run{}).
-		Joins("INNER JOIN jobs ON pipeline_runs.pipeline_spec_id = jobs.pipeline_spec_id").
-		Where("jobs.id = ?", jobID).
-		Count(&count).
-		Error
-
-	if err != nil {
-		return pipelineRuns, 0, err
-	}
-
-	err = o.db.
-		Preload("PipelineSpec").
-		Preload("PipelineTaskRuns", func(db *gorm.DB) *gorm.DB {
-			return db.
-				Order("created_at ASC, id ASC")
-		}).
-		Joins("INNER JOIN jobs ON pipeline_runs.pipeline_spec_id = jobs.pipeline_spec_id").
-		Where("jobs.id = ?", jobID).
-		Limit(size).
-		Offset(offset).
-		Order("created_at DESC, id DESC").
-		Find(&pipelineRuns).
-		Error
-
-	// can skip preloadJobIDs since we already know the jobID
-	for i := range pipelineRuns {
-		pipelineRuns[i].PipelineSpec.JobID = jobID
-	}
-
-	return pipelineRuns, int(count), err
+	return runs, count, err
 }
