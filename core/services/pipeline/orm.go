@@ -20,7 +20,7 @@ var (
 //go:generate mockery --name ORM --output ./mocks/ --case=underscore
 
 type ORM interface {
-	CreateSpec(ctx context.Context, tx *gorm.DB, pipeline Pipeline, maxTaskTimeout models.Interval) (int32, error)
+	CreateSpec(tx *sqlx.Tx, pipeline Pipeline, maxTaskTimeout models.Interval) (int32, error)
 	CreateRun(db postgres.Queryer, run *Run) (err error)
 	DeleteRun(id int64) error
 	StoreRun(db postgres.Queryer, run *Run) (restart bool, err error)
@@ -43,17 +43,12 @@ func NewORM(db *gorm.DB) *orm {
 	return &orm{db}
 }
 
-// The tx argument must be an already started transaction.
-func (o *orm) CreateSpec(ctx context.Context, tx *gorm.DB, pipeline Pipeline, maxTaskDuration models.Interval) (int32, error) {
-	spec := Spec{
-		DotDagSource:    pipeline.Source,
-		MaxTaskDuration: maxTaskDuration,
-	}
-	err := tx.Create(&spec).Error
-	if err != nil {
-		return 0, err
-	}
-	return spec.ID, errors.WithStack(err)
+func (o *orm) CreateSpec(tx *sqlx.Tx, pipeline Pipeline, maxTaskDuration models.Interval) (id int32, err error) {
+	sql := `INSERT INTO pipeline_specs (dot_dag_source, max_task_duration, created_at)
+	VALUES ($1, $2, NOW())
+	RETURNING id;`
+	err = tx.QueryRowx(sql, pipeline.Source, maxTaskDuration).Scan(&id)
+	return id, errors.WithStack(err)
 }
 
 func (o *orm) CreateRun(db postgres.Queryer, run *Run) (err error) {

@@ -6,7 +6,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/smartcontractkit/chainlink/core/bridges"
 	"github.com/smartcontractkit/chainlink/core/chains/evm"
 	"github.com/smartcontractkit/chainlink/core/logger"
 	"github.com/smartcontractkit/chainlink/core/services/keystore"
@@ -14,6 +13,9 @@ import (
 	"github.com/smartcontractkit/chainlink/core/services/postgres"
 	"github.com/smartcontractkit/chainlink/core/store/models"
 	"github.com/smartcontractkit/sqlx"
+	"go.uber.org/multierr"
+	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 
 	"github.com/jackc/pgconn"
 	"github.com/pkg/errors"
@@ -74,17 +76,31 @@ func NewORM(
 	}
 }
 
-func PreloadAllJobTypes(db *sqlx.DB) *sqlx.DB {
-	return db.
-		Preload("PipelineSpec").
-		Preload("FluxMonitorSpec").
-		Preload("DirectRequestSpec").
-		Preload("OffchainreportingOracleSpec").
-		Preload("KeeperSpec").
-		Preload("PipelineSpec").
-		Preload("CronSpec").
-		Preload("WebhookSpec").
-		Preload("VRFSpec")
+func LoadAllJobTypes(tx *sqlx.Tx, jobs []Job) error {
+	for i, job := range jobs {
+		err := multierr.Combine(
+			loadJobType(tx, &jobs[i].PipelineSpec, "pipeline_specs", &job.PipelineSpecID),
+			loadJobType(tx, &jobs[i].FluxMonitorSpec, "flux_monitor_specs", job.FluxMonitorSpecID),
+			loadJobType(tx, &jobs[i].DirectRequestSpec, "direct_request_specs", job.DirectRequestSpecID),
+			loadJobType(tx, &jobs[i].OffchainreportingOracleSpec, "offchainreporting_oracle_specs", job.OffchainreportingOracleSpecID),
+			loadJobType(tx, &jobs[i].KeeperSpec, "keeper_specs", job.KeeperSpecID),
+			loadJobType(tx, &jobs[i].CronSpec, "cron_specs", job.CronSpecID),
+			loadJobType(tx, &jobs[i].WebhookSpec, "webhook_specs", job.WebhookSpecID),
+			loadJobType(tx, &jobs[i].VRFSpec, "vrf_specs", job.VRFSpecID),
+		)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func loadJobType(tx *sqlx.Tx, dest interface{}, table string, id *int32) error {
+	if id == nil {
+		return nil
+	}
+	err := tx.Get(dest, fmt.Sprintf(`SELECT * FROM %s WHERE id = $1`, table), *id)
+	return errors.Wrapf(err, "failed to load job type %s with id %d", table, *id)
 }
 
 func (o *orm) Close() error {
@@ -233,25 +249,34 @@ func (o *orm) CreateJob(ctx context.Context, jobSpec *Job, p pipeline.Pipeline) 
 			logger.Fatalf("Unsupported jobSpec.Type: %v", jobSpec.Type)
 		}
 
-		pipelineSpecID, err := o.pipelineORM.CreateSpec(ctx, tx, p, jobSpec.MaxTaskDuration)
+		pipelineSpecID, err := o.pipelineORM.CreateSpec(tx, p, jobSpec.MaxTaskDuration)
 		if err != nil {
-			return jb, errors.Wrap(err, "failed to create pipeline spec")
+			return errors.Wrap(err, "failed to create pipeline spec")
 		}
 		jobSpec.PipelineSpecID = pipelineSpecID
-		err = tx.Create(jobSpec).Error
+
+		sql := `INSERT INTO jobs (pipeline_spec_id, offchainreporting_oracle_spec_id, name, schema_version, type, max_task_duration, direct_request_spec_id, flux_monitor_spec_id,
+				keeper_spec_id, cron_spec_id, vrf_spec_id, webhook_spec_id, external_job_id, created_at, updated_at)
+		VALUES (:pipeline_spec_id, :offchainreporting_oracle_spec_id, :name, :schema_version, :type, :max_task_duration, :direct_request_spec_id, :flux_monitor_spec_id,
+				:keeper_spec_id, :cron_spec_id, :vrf_spec_id, :webhook_spec_id, :external_job_id, NOW(), NOW())
+		RETURNING *;`
+		err = postgres.PrepareGet(tx, sql, &jobSpec, &jobSpec)
 		if err != nil {
-			return jb, errors.Wrap(err, "failed to create job")
+			return errors.Wrap(err, "failed to create job")
 		}
 	})
+	if err != nil {
+		return jb, err
+	}
 
 	return o.FindJob(ctx, jobSpec.ID)
 }
 
 // DeleteJob removes a job
 func (o *orm) DeleteJob(ctx context.Context, id int32) error {
-	tx := postgres.TxFromContext(ctx, o.db)
-
-	err := tx.Exec(`
+	postgres.EnsureNoTxInContext(ctx)
+	postgres.SqlxTransaction(ctx, o.db, func(tx *sqlx.Tx) error {
+		return tx.Exec(`
 		WITH deleted_jobs AS (
 			DELETE FROM jobs WHERE id = ? RETURNING
 				pipeline_spec_id,
@@ -286,9 +311,10 @@ func (o *orm) DeleteJob(ctx context.Context, id int32) error {
 		)
 		DELETE FROM pipeline_specs WHERE id IN (SELECT pipeline_spec_id FROM deleted_jobs)
 	`, id).Error
-	if err != nil {
-		return errors.Wrap(err, "DeleteJob failed to delete job")
-	}
+		if err != nil {
+			return errors.Wrap(err, "DeleteJob failed to delete job")
+		}
+	})
 
 	return nil
 }
@@ -325,23 +351,14 @@ func (o *orm) DismissError(ctx context.Context, ID int32) error {
 func (o *orm) JobsV2(offset, limit int) ([]Job, int, error) {
 	var count int64
 	var jobs []Job
-	err := postgres.GormTransactionWithDefaultContext(o.db, func(tx *gorm.DB) error {
-		err := tx.
-			Model(Job{}).
-			Count(&count).
-			Error
-
+	err := postgres.SqlxTransactionWithDefaultCtx(o.db, func(tx *sqlx.Tx) error {
+		sql = `SELECT * FROM jobs ORDER BY id ASC OFFSET $1 LIMIT $2`
+		err := tx.Select(&jobs, sql, offset, limit)
 		if err != nil {
 			return err
 		}
 
-		err = PreloadAllJobTypes(tx).
-			Preload("JobSpecErrors").
-			Limit(limit).
-			Offset(offset).
-			Order("id ASC").
-			Find(&jobs).
-			Error
+		err = LoadAllJobTypes(tx, &jobs)
 		if err != nil {
 			return err
 		}

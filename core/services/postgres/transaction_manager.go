@@ -119,6 +119,12 @@ func (txm *gormTransactionManager) TransactWithContext(ctx context.Context, fn T
 	return err
 }
 
+func EnsureNoTxInContext(ctx context.Context) {
+	if _, ok := ctx.Value(txKey{}).(*gorm.DB); ok {
+		panic("tx in context")
+	}
+}
+
 // TxFromContext extracts the tx from the context. If no transaction value is
 // provided in the context, it returns the gorm.DB.
 func TxFromContext(ctx context.Context, db *gorm.DB) *gorm.DB {
