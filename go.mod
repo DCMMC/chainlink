@@ -1,4 +1,4 @@
-module github.com/smartcontractkit/chainlink
+module github.com/DCMMC/chainlink
 
 go 1.16
 
