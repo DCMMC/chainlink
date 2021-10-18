@@ -5,24 +5,22 @@ import "../interfaces/LinkTokenInterface.sol";
 import "../VRFConsumerBase.sol";
 
 contract VRFConsumer is VRFConsumerBase {
-
   uint256 public randomnessOutput;
   bytes32 public requestId;
 
-  constructor(address _vrfCoordinator, address _link) public
+  constructor(address vrfCoordinator, address link)
     // solhint-disable-next-line no-empty-blocks
-    VRFConsumerBase(_vrfCoordinator, _link) { /* empty */ }
-
-  function fulfillRandomness(bytes32 _requestId, uint256 _randomness)
-    internal override
+    VRFConsumerBase(vrfCoordinator, link)
   {
-    randomnessOutput = _randomness;
-    requestId = _requestId;
+    /* empty */
   }
 
-  function testRequestRandomness(bytes32 _keyHash, uint256 _fee)
-    external returns (bytes32 requestId)
-  {
-    return requestRandomness(_keyHash, _fee);
+  function fulfillRandomness(bytes32 requestId, uint256 randomness) internal override {
+    randomnessOutput = randomness;
+    requestId = requestId;
+  }
+
+  function testRequestRandomness(bytes32 keyHash, uint256 fee) external returns (bytes32) {
+    return requestRandomness(keyHash, fee);
   }
 }

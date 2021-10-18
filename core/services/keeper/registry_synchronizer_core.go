@@ -7,10 +7,33 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 
 	"github.com/DCMMC/chainlink/core/internal/gethwrappers/generated/keeper_registry_wrapper"
+	"github.com/DCMMC/chainlink/core/logger"
 	"github.com/DCMMC/chainlink/core/services/job"
 	"github.com/DCMMC/chainlink/core/services/log"
 	"github.com/DCMMC/chainlink/core/utils"
 )
+
+// RegistrySynchronizer conforms to the Service and Listener interfaces
+var (
+	_ job.Service  = (*RegistrySynchronizer)(nil)
+	_ log.Listener = (*RegistrySynchronizer)(nil)
+)
+
+type RegistrySynchronizer struct {
+	chStop              chan struct{}
+	contract            *keeper_registry_wrapper.KeeperRegistry
+	interval            time.Duration
+	job                 job.Job
+	jrm                 job.ORM
+	logBroadcaster      log.Broadcaster
+	mailRoom            MailRoom
+	minConfirmations    uint64
+	orm                 ORM
+	logger              logger.Logger
+	wgDone              sync.WaitGroup
+	syncUpkeepQueueSize uint32 //Represents the max number of upkeeps that can be synced in parallel
+	utils.StartStopOnce
+}
 
 // MailRoom holds the log mailboxes for all the log types that keeper cares about
 type MailRoom struct {
@@ -20,6 +43,7 @@ type MailRoom struct {
 	mbUpkeepRegistered *utils.Mailbox
 }
 
+// NewRegistrySynchronizer is the constructor of RegistrySynchronizer
 func NewRegistrySynchronizer(
 	job job.Job,
 	contract *keeper_registry_wrapper.KeeperRegistry,
@@ -28,6 +52,8 @@ func NewRegistrySynchronizer(
 	logBroadcaster log.Broadcaster,
 	syncInterval time.Duration,
 	minConfirmations uint64,
+	logger logger.Logger,
+	syncUpkeepQueueSize uint32,
 ) *RegistrySynchronizer {
 	mailRoom := MailRoom{
 		mbUpkeepCanceled:   utils.NewMailbox(50),
@@ -36,36 +62,18 @@ func NewRegistrySynchronizer(
 		mbUpkeepRegistered: utils.NewMailbox(50),
 	}
 	return &RegistrySynchronizer{
-		chStop:           make(chan struct{}),
-		contract:         contract,
-		interval:         syncInterval,
-		job:              job,
-		jrm:              jrm,
-		logBroadcaster:   logBroadcaster,
-		mailRoom:         mailRoom,
-		minConfirmations: minConfirmations,
-		orm:              orm,
-		StartStopOnce:    utils.StartStopOnce{},
-		wgDone:           sync.WaitGroup{},
+		chStop:              make(chan struct{}),
+		contract:            contract,
+		interval:            syncInterval,
+		job:                 job,
+		jrm:                 jrm,
+		logBroadcaster:      logBroadcaster,
+		mailRoom:            mailRoom,
+		minConfirmations:    minConfirmations,
+		orm:                 orm,
+		logger:              logger.Named("RegistrySynchronizer"),
+		syncUpkeepQueueSize: syncUpkeepQueueSize,
 	}
-}
-
-// RegistrySynchronizer conforms to the Service, Listener, and HeadRelayable interfaces
-var _ job.Service = (*RegistrySynchronizer)(nil)
-var _ log.Listener = (*RegistrySynchronizer)(nil)
-
-type RegistrySynchronizer struct {
-	chStop           chan struct{}
-	contract         *keeper_registry_wrapper.KeeperRegistry
-	interval         time.Duration
-	job              job.Job
-	jrm              job.ORM
-	logBroadcaster   log.Broadcaster
-	mailRoom         MailRoom
-	minConfirmations uint64
-	orm              ORM
-	wgDone           sync.WaitGroup
-	utils.StartStopOnce
 }
 
 func (rs *RegistrySynchronizer) Start() error {

@@ -11,7 +11,7 @@ jobs:
     name: Core Tests
     runs-on: ubuntu-latest
     container:
-      image: smartcontract/builder:1.0.40
+      image: smartcontract/builder:1.0.42
       credentials:
         username: ${{ secrets.DOCKER_READONLY_USERNAME }}
         password: ${{ secrets.DOCKER_READONLY_PASSWORD }}
@@ -20,7 +20,7 @@ jobs:
       LOG_LEVEL: debug
     services:
       postgres:
-        image: postgres
+        image: postgres:14
         credentials:
           username: ${{ secrets.DOCKER_READONLY_USERNAME }}
           password: ${{ secrets.DOCKER_READONLY_PASSWORD }}
@@ -41,7 +41,7 @@ jobs:
         with:
           args: psql -v ON_ERROR_STOP=1 --username postgres -h postgres -c "CREATE USER chainlink NOSUPERUSER CREATEDB;"
       - name: Install Postgres for CLI tools
-        run: wget --quiet -O - https://packages.cloud.google.com/apt/doc/apt-key.gpg | apt-key add - && wget --quiet -O - https://www.postgresql.org/media/keys/ACCC4CF8.asc | apt-key add - && echo "deb http://apt.postgresql.org/pub/repos/apt/ `lsb_release -cs`-pgdg main" | tee  /etc/apt/sources.list.d/pgdg.list && apt update && apt install -y postgresql-client-13
+        run: wget --quiet -O - https://packages.cloud.google.com/apt/doc/apt-key.gpg | apt-key add - && wget --quiet -O - https://www.postgresql.org/media/keys/ACCC4CF8.asc | apt-key add - && echo "deb http://apt.postgresql.org/pub/repos/apt/ `lsb_release -cs`-pgdg main" | tee  /etc/apt/sources.list.d/pgdg.list && apt update && apt install -y postgresql-client-14
       - name: Get Yarn cache directory path
         id: yarn-cache-dir-path
         run: echo "::set-output name=dir::$(yarn cache dir)"      
@@ -73,7 +73,7 @@ jobs:
         run: ./tools/bin/${{ matrix.cmd }}
       - name: Store logs artifacts on failure
         if: failure()
-        uses: actions/upload-artifact@v1
+        uses: actions/upload-artifact@v2.2.4
         with:
           name: ${{ matrix.cmd }}_logs
           path: ./output.txt
@@ -87,7 +87,7 @@ jobs:
     name: Prepublish NPM
     runs-on: ubuntu-latest
     container:
-      image: smartcontract/builder:1.0.40
+      image: smartcontract/builder:1.0.42
       credentials:
         username: ${{ secrets.DOCKER_READONLY_USERNAME }}
         password: ${{ secrets.DOCKER_READONLY_PASSWORD }}
@@ -109,6 +109,5 @@ jobs:
             ${{ runner.os }}-build-
             ${{ runner.os }}-
       - run: yarn install --frozen-lockfile
-      - run: ./tools/bin/restore-solc-cache
       - name: Run prepublish NPM test
         run: ./tools/ci/prepublish_npm_test

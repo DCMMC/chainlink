@@ -4,18 +4,17 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"math/big"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
 	"strings"
 	"testing"
 
-	"math/big"
-
 	"github.com/onsi/gomega"
 	"github.com/DCMMC/chainlink/core/internal/cltest"
+	"github.com/DCMMC/chainlink/core/logger"
 	"github.com/DCMMC/chainlink/core/services/eth"
-	"github.com/DCMMC/chainlink/core/store/models"
 	"github.com/DCMMC/chainlink/core/utils"
 
 	"github.com/ethereum/go-ethereum"
@@ -32,15 +31,14 @@ func TestEthClient_TransactionReceipt(t *testing.T) {
 
 	t.Run("happy path", func(t *testing.T) {
 		response := cltest.MustReadFile(t, "../../testdata/jsonrpc/getTransactionReceipt.json")
-		_, wsUrl, wsCleanup := cltest.NewWSServer(string(response), func(data []byte) {
+		_, wsUrl := cltest.NewWSServer(t, string(response), func(data []byte) {
 			resp := cltest.ParseJSON(t, bytes.NewReader(data))
 			require.Equal(t, "eth_getTransactionReceipt", resp.Get("method").String())
 			require.True(t, resp.Get("params").IsArray())
 			require.Equal(t, txHash, resp.Get("params").Get("0").String())
 		})
-		defer wsCleanup()
 
-		ethClient, err := eth.NewClient(wsUrl, nil, []url.URL{})
+		ethClient, err := eth.NewClient(logger.TestLogger(t), wsUrl, nil, []url.URL{}, nil)
 		require.NoError(t, err)
 		err = ethClient.Dial(context.Background())
 		require.NoError(t, err)
@@ -54,15 +52,14 @@ func TestEthClient_TransactionReceipt(t *testing.T) {
 
 	t.Run("no tx hash, returns ethereum.NotFound", func(t *testing.T) {
 		response := cltest.MustReadFile(t, "../../testdata/jsonrpc/getTransactionReceipt_notFound.json")
-		_, wsUrl, wsCleanup := cltest.NewWSServer(string(response), func(data []byte) {
+		_, wsUrl := cltest.NewWSServer(t, string(response), func(data []byte) {
 			resp := cltest.ParseJSON(t, bytes.NewReader(data))
 			require.Equal(t, "eth_getTransactionReceipt", resp.Get("method").String())
 			require.True(t, resp.Get("params").IsArray())
 			require.Equal(t, txHash, resp.Get("params").Get("0").String())
 		})
-		defer wsCleanup()
 
-		ethClient, err := eth.NewClient(wsUrl, nil, nil)
+		ethClient, err := eth.NewClient(logger.TestLogger(t), wsUrl, nil, nil, nil)
 		require.NoError(t, err)
 		err = ethClient.Dial(context.Background())
 		require.NoError(t, err)
@@ -78,7 +75,7 @@ func TestEthClient_PendingNonceAt(t *testing.T) {
 
 	address := cltest.NewAddress()
 
-	_, url, cleanup := cltest.NewWSServer(`{
+	_, url := cltest.NewWSServer(t, `{
       "id": 1,
       "jsonrpc": "2.0",
       "result": "0x100"
@@ -89,9 +86,8 @@ func TestEthClient_PendingNonceAt(t *testing.T) {
 		require.Equal(t, strings.ToLower(address.Hex()), strings.ToLower(resp.Get("params").Get("0").String()))
 		require.Equal(t, "pending", resp.Get("params").Get("1").String())
 	})
-	defer cleanup()
 
-	ethClient, err := eth.NewClient(url, nil, nil)
+	ethClient, err := eth.NewClient(logger.TestLogger(t), url, nil, nil, nil)
 	require.NoError(t, err)
 	err = ethClient.Dial(context.Background())
 	require.NoError(t, err)
@@ -120,7 +116,7 @@ func TestEthClient_BalanceAt(t *testing.T) {
 	for _, test := range tests {
 		test := test
 		t.Run(test.name, func(t *testing.T) {
-			_, url, cleanup := cltest.NewWSServer(`{
+			_, url := cltest.NewWSServer(t, `{
               "id": 1,
               "jsonrpc": "2.0",
               "result": "`+hexutil.EncodeBig(test.balance)+`"
@@ -130,9 +126,8 @@ func TestEthClient_BalanceAt(t *testing.T) {
 				require.True(t, resp.Get("params").IsArray())
 				require.Equal(t, strings.ToLower(address.Hex()), strings.ToLower(resp.Get("params").Get("0").String()))
 			})
-			defer cleanup()
 
-			ethClient, err := eth.NewClient(url, nil, nil)
+			ethClient, err := eth.NewClient(logger.TestLogger(t), url, nil, nil, nil)
 			require.NoError(t, err)
 			err = ethClient.Dial(context.Background())
 			require.NoError(t, err)
@@ -162,10 +157,10 @@ func TestEthClient_GetERC20Balance(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			contractAddress := cltest.NewAddress()
 			userAddress := cltest.NewAddress()
-			functionSelector := models.HexToFunctionSelector("0x70a08231") // balanceOf(address)
+			functionSelector := eth.HexToFunctionSelector("0x70a08231") // balanceOf(address)
 			txData := utils.ConcatBytes(functionSelector.Bytes(), common.LeftPadBytes(userAddress.Bytes(), utils.EVMWordByteLen))
 
-			_, url, cleanup := cltest.NewWSServer(`{
+			_, url := cltest.NewWSServer(t, `{
               "id": 1,
               "jsonrpc": "2.0",
               "result": "`+hexutil.EncodeBig(test.balance)+`"
@@ -181,9 +176,8 @@ func TestEthClient_GetERC20Balance(t *testing.T) {
 
 				require.Equal(t, "latest", resp.Get("params").Get("1").String())
 			})
-			defer cleanup()
 
-			ethClient, err := eth.NewClient(url, nil, nil)
+			ethClient, err := eth.NewClient(logger.TestLogger(t), url, nil, nil, nil)
 			require.NoError(t, err)
 			err = ethClient.Dial(context.Background())
 			require.NoError(t, err)
@@ -232,7 +226,7 @@ func TestEthClient_HeaderByNumber(t *testing.T) {
 	for _, test := range tests {
 		test := test
 		t.Run(test.name, func(t *testing.T) {
-			_, url, cleanup := cltest.NewWSServer(test.rpcResp, func(data []byte) {
+			_, url := cltest.NewWSServer(t, test.rpcResp, func(data []byte) {
 				req := cltest.ParseJSON(t, bytes.NewReader(data))
 
 				require.True(t, req.IsObject())
@@ -248,9 +242,8 @@ func TestEthClient_HeaderByNumber(t *testing.T) {
 
 				require.Equal(t, false, req.Get("params").Get("1").Bool())
 			})
-			defer cleanup()
 
-			ethClient, err := eth.NewClient(url, nil, nil)
+			ethClient, err := eth.NewClient(logger.TestLogger(t), url, nil, nil, nil)
 			require.NoError(t, err)
 			err = ethClient.Dial(context.Background())
 			require.NoError(t, err)
@@ -273,7 +266,7 @@ func TestEthClient_SendTransaction_NoSecondaryURL(t *testing.T) {
 
 	tx := types.NewTransaction(uint64(42), cltest.NewAddress(), big.NewInt(142), 242, big.NewInt(342), []byte{1, 2, 3})
 
-	_, url, cleanup := cltest.NewWSServer(`{
+	_, url := cltest.NewWSServer(t, `{
   "id": 1,
   "jsonrpc": "2.0",
   "result": "`+tx.Hash().Hex()+`"
@@ -282,9 +275,8 @@ func TestEthClient_SendTransaction_NoSecondaryURL(t *testing.T) {
 		require.Equal(t, "eth_sendRawTransaction", resp.Get("method").String())
 		require.True(t, resp.Get("params").IsArray())
 	})
-	defer cleanup()
 
-	ethClient, err := eth.NewClient(url, nil, nil)
+	ethClient, err := eth.NewClient(logger.TestLogger(t), url, nil, nil, nil)
 	require.NoError(t, err)
 	err = ethClient.Dial(context.Background())
 	require.NoError(t, err)
@@ -304,12 +296,11 @@ func TestEthClient_SendTransaction_WithSecondaryURLs(t *testing.T) {
   "result": "` + tx.Hash().Hex() + `"
 }`
 
-	_, wsUrl, cleanup := cltest.NewWSServer(response, func(data []byte) {
+	_, wsUrl := cltest.NewWSServer(t, response, func(data []byte) {
 		resp := cltest.ParseJSON(t, bytes.NewReader(data))
 		require.Equal(t, "eth_sendRawTransaction", resp.Get("method").String())
 		require.True(t, resp.Get("params").IsArray())
 	})
-	defer cleanup()
 
 	requests := make(chan struct{}, 2)
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -320,8 +311,8 @@ func TestEthClient_SendTransaction_WithSecondaryURLs(t *testing.T) {
 	server := httptest.NewServer(handler)
 	defer server.Close()
 
-	secondaryUrl := *cltest.MustParseURL(server.URL)
-	ethClient, err := eth.NewClient(wsUrl, nil, []url.URL{secondaryUrl, secondaryUrl})
+	sendonlyUrl := *cltest.MustParseURL(t, server.URL)
+	ethClient, err := eth.NewClient(logger.TestLogger(t), wsUrl, nil, []url.URL{sendonlyUrl, sendonlyUrl}, nil)
 	require.NoError(t, err)
 	err = ethClient.Dial(context.Background())
 	require.NoError(t, err)

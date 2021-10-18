@@ -3,16 +3,16 @@ package types
 import (
 	"context"
 
-	"github.com/DCMMC/chainlink/core/logger"
 	"github.com/DCMMC/chainlink/core/service"
-	"github.com/DCMMC/chainlink/core/store/models"
+	"github.com/DCMMC/chainlink/core/services/eth"
+	"go.uber.org/zap/zapcore"
 )
 
 type Tracker interface {
-	HighestSeenHeadFromDB() (*models.Head, error)
+	HighestSeenHeadFromDB(context.Context) (*eth.Head, error)
 	Start() error
 	Stop() error
-	SetLogger(logger *logger.Logger)
+	SetLogLevel(lvl zapcore.Level)
 	Ready() error
 	Healthy() error
 }
@@ -21,12 +21,13 @@ type Tracker interface {
 // after being subscribed to HeadBroadcaster
 //go:generate mockery --name HeadTrackable --output ../mocks/ --case=underscore
 type HeadTrackable interface {
-	Connect(head *models.Head) error
-	OnNewLongestChain(ctx context.Context, head models.Head)
+	OnNewLongestChain(ctx context.Context, head eth.Head)
 }
 
+type SubscribeFunc func(callback HeadTrackable) (unsubscribe func())
+
 type HeadBroadcasterRegistry interface {
-	Subscribe(callback HeadTrackable) (currentLongestChain *models.Head, unsubscribe func())
+	Subscribe(callback HeadTrackable) (currentLongestChain *eth.Head, unsubscribe func())
 }
 
 // HeadBroadcaster is the external interface of headBroadcaster
@@ -34,16 +35,5 @@ type HeadBroadcasterRegistry interface {
 type HeadBroadcaster interface {
 	service.Service
 	HeadTrackable
-	Subscribe(callback HeadTrackable) (currentLongestChain *models.Head, unsubscribe func())
+	Subscribe(callback HeadTrackable) (currentLongestChain *eth.Head, unsubscribe func())
 }
-
-// HeadTrackableCallback is a simple wrapper around an On Connect callback
-type HeadTrackableCallback struct {
-	OnConnect func() error
-}
-
-func (c *HeadTrackableCallback) Connect(*models.Head) error {
-	return c.OnConnect()
-}
-
-func (c *HeadTrackableCallback) OnNewLongestChain(context.Context, models.Head) {}

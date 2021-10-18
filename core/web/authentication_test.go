@@ -7,8 +7,7 @@ import (
 
 	"github.com/DCMMC/chainlink/core/auth"
 	"github.com/DCMMC/chainlink/core/internal/cltest"
-	"github.com/DCMMC/chainlink/core/store"
-	"github.com/DCMMC/chainlink/core/store/models"
+	"github.com/DCMMC/chainlink/core/sessions"
 	"github.com/DCMMC/chainlink/core/web"
 
 	"github.com/gin-gonic/gin"
@@ -30,25 +29,25 @@ func authSuccess(web.AuthStorer, *gin.Context) error {
 }
 
 type userFindFailer struct {
-	*store.Store
+	sessions.ORM
 	err error
 }
 
-func (u userFindFailer) FindUser() (models.User, error) {
-	return models.User{}, u.err
+func (u userFindFailer) FindUser() (sessions.User, error) {
+	return sessions.User{}, u.err
 }
 
 type userFindSuccesser struct {
-	*store.Store
-	user models.User
+	sessions.ORM
+	user sessions.User
 }
 
-func (u userFindSuccesser) FindUser() (models.User, error) {
+func (u userFindSuccesser) FindUser() (sessions.User, error) {
 	return u.user, nil
 }
 
 func TestAuthenticateByToken_Success(t *testing.T) {
-	user := cltest.MustRandomUser()
+	user := cltest.MustRandomUser(t)
 	apiToken := auth.Token{AccessKey: cltest.APIKey, Secret: cltest.APISecret}
 	err := user.SetAuthToken(&apiToken)
 	require.NoError(t, err)

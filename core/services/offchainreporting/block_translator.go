@@ -5,8 +5,8 @@ import (
 	"math/big"
 
 	"github.com/DCMMC/chainlink/core/chains"
+	"github.com/DCMMC/chainlink/core/logger"
 	"github.com/DCMMC/chainlink/core/services/eth"
-	"github.com/DCMMC/chainlink/core/store/models"
 )
 
 // BlockTranslator converts emitted block numbers (from block.number) into a
@@ -16,15 +16,18 @@ type BlockTranslator interface {
 }
 
 // NewBlockTranslator returns the block translator for the given chain
-func NewBlockTranslator(chain *chains.Chain, client eth.Client) BlockTranslator {
-	if chain == nil {
-		return &l1BlockTranslator{}
-	} else if chain.IsArbitrum() {
-		return NewArbitrumBlockTranslator(client)
-	} else if chain.IsOptimism() {
+func NewBlockTranslator(cfg Config, client eth.Client, lggr logger.Logger) BlockTranslator {
+	switch cfg.ChainType() {
+	case chains.Arbitrum:
+		return NewArbitrumBlockTranslator(client, lggr)
+	case chains.Optimism:
 		return newOptimismBlockTranslator()
+
+	case chains.XDai, chains.ExChain:
+		fallthrough
+	default:
+		return &l1BlockTranslator{}
 	}
-	return &l1BlockTranslator{}
 }
 
 type l1BlockTranslator struct{}
@@ -33,7 +36,7 @@ func (*l1BlockTranslator) NumberToQueryRange(_ context.Context, changedInL1Block
 	return big.NewInt(int64(changedInL1Block)), big.NewInt(int64(changedInL1Block))
 }
 
-func (*l1BlockTranslator) OnNewLongestChain(context.Context, models.Head) {}
+func (*l1BlockTranslator) OnNewLongestChain(context.Context, eth.Head) {}
 
 type optimismBlockTranslator struct{}
 

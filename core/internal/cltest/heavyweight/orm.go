@@ -14,34 +14,47 @@ import (
 	"runtime"
 	"testing"
 
-	"github.com/DCMMC/chainlink/core/gracefulpanic"
 	"github.com/DCMMC/chainlink/core/internal/cltest"
+	"github.com/DCMMC/chainlink/core/internal/testutils/configtest"
+	"github.com/DCMMC/chainlink/core/services/postgres"
 	"github.com/DCMMC/chainlink/core/store/dialects"
-	"github.com/DCMMC/chainlink/core/store/migrations"
-	"github.com/DCMMC/chainlink/core/store/orm"
+	migrations "github.com/DCMMC/chainlink/core/store/migrate"
+	"github.com/smartcontractkit/sqlx"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"gopkg.in/guregu/null.v4"
+	"gorm.io/gorm"
 )
 
-// FullTestORM creates an ORM which runs in a separate database than the normal
+// FullTestDB creates an DB which runs in a separate database than the normal
 // unit tests, so you can do things like use other Postgres connection types
 // with it.
-func FullTestORM(t *testing.T, name string, migrate bool, loadFixtures ...bool) (*cltest.TestConfig, *orm.ORM, func()) {
-	tc, cleanup := cltest.NewConfig(t)
-	config := tc.Config
-	config.Dialect = dialects.PostgresWithoutLock
-
-	require.NoError(t, os.MkdirAll(config.RootDir(), 0700))
-	migrationTestDBURL, err := dropAndCreateThrowawayTestDB(tc.DatabaseURL(), name)
-	require.NoError(t, err)
-	orm, err := orm.NewORM(migrationTestDBURL, config.DatabaseTimeout(), gracefulpanic.NewSignal(), dialects.PostgresWithoutLock, 0, config.GlobalLockRetryInterval().Duration(), config.ORMMaxOpenConns(), config.ORMMaxIdleConns())
-	require.NoError(t, err)
-	orm.SetLogging(config.LogSQLStatements() || config.LogSQLMigrations())
-	tc.Config.Set("DATABASE_URL", migrationTestDBURL)
-	if migrate {
-		require.NoError(t, migrations.Migrate(orm.DB))
+func FullTestDB(t *testing.T, name string, migrate bool, loadFixtures bool) (*configtest.TestGeneralConfig, *sqlx.DB, *gorm.DB) {
+	overrides := configtest.GeneralConfigOverrides{
+		SecretGenerator: cltest.MockSecretGenerator{},
 	}
-	if len(loadFixtures) > 0 && loadFixtures[0] {
+	gcfg := configtest.NewTestGeneralConfigWithOverrides(t, overrides)
+	gcfg.SetDialect(dialects.Postgres)
+
+	require.NoError(t, os.MkdirAll(gcfg.RootDir(), 0700))
+	migrationTestDBURL, err := dropAndCreateThrowawayTestDB(gcfg.DatabaseURL(), name)
+	require.NoError(t, err)
+	db, gormDB, err := postgres.NewConnection(migrationTestDBURL, string(dialects.Postgres), postgres.Config{
+		LogSQLStatements: gcfg.LogSQLStatements(),
+		MaxOpenConns:     gcfg.ORMMaxOpenConns(),
+		MaxIdleConns:     gcfg.ORMMaxIdleConns(),
+	})
+	require.NoError(t, err)
+	t.Cleanup(func() {
+		assert.NoError(t, db.Close())
+		os.RemoveAll(gcfg.RootDir())
+	})
+	postgres.SetLogAllQueries(gormDB, gcfg.LogSQLMigrations())
+	gcfg.Overrides.DatabaseURL = null.StringFrom(migrationTestDBURL)
+	if migrate {
+		require.NoError(t, migrations.Migrate(db.DB))
+	}
+	if loadFixtures {
 		_, filename, _, ok := runtime.Caller(0)
 		if !ok {
 			t.Fatal("could not get runtime.Caller(0)")
@@ -49,15 +62,12 @@ func FullTestORM(t *testing.T, name string, migrate bool, loadFixtures ...bool) 
 		filepath := path.Join(path.Dir(filename), "../../../store/fixtures/fixtures.sql")
 		fixturesSQL, err := ioutil.ReadFile(filepath)
 		require.NoError(t, err)
-		err = orm.DB.Exec(string(fixturesSQL)).Error
+		_, err = db.Exec(string(fixturesSQL))
 		require.NoError(t, err)
 	}
+	postgres.SetLogAllQueries(gormDB, gcfg.LogSQLStatements())
 
-	return tc, orm, func() {
-		assert.NoError(t, orm.Close())
-		cleanup()
-		os.RemoveAll(config.RootDir())
-	}
+	return gcfg, db, gormDB
 }
 
 func dropAndCreateThrowawayTestDB(parsed url.URL, postfix string) (string, error) {
@@ -67,7 +77,7 @@ func dropAndCreateThrowawayTestDB(parsed url.URL, postfix string) (string, error
 
 	dbname := fmt.Sprintf("%s_%s", parsed.Path[1:], postfix)
 	if len(dbname) > 62 {
-		return "", errors.New("dbname too long, max is 63 bytes. Try a shorter postfix")
+		return "", fmt.Errorf("dbname %v too long, max is 63 bytes. Try a shorter postfix", dbname)
 	}
 	// Cannot drop test database if we are connected to it, so we must connect
 	// to a different one. 'postgres' should be present on all postgres installations

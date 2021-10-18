@@ -126,7 +126,7 @@ func (p *JobPresenter) RenderTable(rt RendererTable) error {
 		table.Append(r)
 	}
 
-	render("Jobs (V2)", table)
+	render("Jobs", table)
 	return nil
 }
 
@@ -146,14 +146,33 @@ func (ps JobPresenters) RenderTable(rt RendererTable) error {
 	return nil
 }
 
-// ListJobsV2 lists all v2 jobs
-func (cli *Client) ListJobsV2(c *cli.Context) (err error) {
+// ListJobs lists all jobs
+func (cli *Client) ListJobs(c *cli.Context) (err error) {
 	return cli.getPage("/v2/jobs", c.Int("page"), &JobPresenters{})
 }
 
-// CreateJobV2 creates a V2 job
+// ShowJob displays the details of a job
+func (cli *Client) ShowJob(c *cli.Context) (err error) {
+	if !c.Args().Present() {
+		return cli.errorOut(errors.New("must provide the id of the job"))
+	}
+	id := c.Args().First()
+	resp, err := cli.HTTP.Get("/v2/jobs/" + id)
+	if err != nil {
+		return cli.errorOut(err)
+	}
+	defer func() {
+		if cerr := resp.Body.Close(); cerr != nil {
+			err = multierr.Append(err, cerr)
+		}
+	}()
+
+	return cli.renderAPIResponse(resp, &JobPresenter{})
+}
+
+// CreateJob creates a job
 // Valid input is a TOML string or a path to TOML file
-func (cli *Client) CreateJobV2(c *cli.Context) (err error) {
+func (cli *Client) CreateJob(c *cli.Context) (err error) {
 	if !c.Args().Present() {
 		return cli.errorOut(errors.New("must pass in TOML or filepath"))
 	}
@@ -194,8 +213,8 @@ func (cli *Client) CreateJobV2(c *cli.Context) (err error) {
 	return err
 }
 
-// DeleteJobV2 deletes a V2 job
-func (cli *Client) DeleteJobV2(c *cli.Context) error {
+// DeleteJob deletes a job
+func (cli *Client) DeleteJob(c *cli.Context) error {
 	if !c.Args().Present() {
 		return cli.errorOut(errors.New("must pass the job id to be archived"))
 	}
@@ -212,33 +231,7 @@ func (cli *Client) DeleteJobV2(c *cli.Context) error {
 	return nil
 }
 
-// Migrate jobs from the v1 (json) to v2 (toml) format.
-func (cli *Client) Migrate(c *cli.Context) error {
-	if !c.Args().Present() {
-		return cli.errorOut(errors.New("must pass the job id to be migrated"))
-	}
-	resp, err := cli.HTTP.Post(fmt.Sprintf("/v2/migrate/%s", c.Args().First()), nil)
-	if err != nil {
-		return cli.errorOut(err)
-	}
-	if resp.StatusCode != 200 {
-		b, errRead := ioutil.ReadAll(resp.Body)
-		if errRead != nil {
-			return cli.errorOut(errRead)
-		}
-		return cli.errorOut(errors.Errorf("error migrating job %v", string(b)))
-	}
-	defer func() {
-		if cerr := resp.Body.Close(); cerr != nil {
-			err = multierr.Append(err, cerr)
-		}
-	}()
-	var presenter JobPresenter
-	err = cli.renderAPIResponse(resp, &presenter, "V2 job created from V1 job")
-	return nil
-}
-
-// TriggerPipelineRun triggers a V2 job run based on a job ID
+// TriggerPipelineRun triggers a job run based on a job ID
 func (cli *Client) TriggerPipelineRun(c *cli.Context) error {
 	if !c.Args().Present() {
 		return cli.errorOut(errors.New("Must pass the job id to trigger a run"))

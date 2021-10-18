@@ -8,12 +8,14 @@ import (
 
 	"github.com/DCMMC/chainlink/core/cmd"
 	"github.com/DCMMC/chainlink/core/internal/cltest"
+	"github.com/DCMMC/chainlink/core/internal/testutils/configtest"
 	"github.com/DCMMC/chainlink/core/services/job"
 	"github.com/DCMMC/chainlink/core/store/models"
 	"github.com/DCMMC/chainlink/core/web/presenters"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/urfave/cli"
+	null "gopkg.in/guregu/null.v4"
 )
 
 func TestJobPresenter_RenderTable(t *testing.T) {
@@ -276,27 +278,59 @@ func TestClient_ListJobsV2(t *testing.T) {
 	// Create the job
 	fs := flag.NewFlagSet("", flag.ExitOnError)
 	fs.Parse([]string{"../testdata/tomlspecs/direct-request-spec.toml"})
-	err := client.CreateJobV2(cli.NewContext(nil, fs, nil))
+	err := client.CreateJob(cli.NewContext(nil, fs, nil))
 	require.NoError(t, err)
-	createOutput := *r.Renders[0].(*cmd.JobPresenter)
+	require.Len(t, r.Renders, 1)
+	createOutput, ok := r.Renders[0].(*cmd.JobPresenter)
+	require.True(t, ok, "Expected Renders[0] to be *cmd.JobPresenter, got %T", r.Renders[0])
 
-	require.Nil(t, client.ListJobsV2(cltest.EmptyCLIContext()))
+	require.Nil(t, client.ListJobs(cltest.EmptyCLIContext()))
 	jobs := *r.Renders[1].(*cmd.JobPresenters)
 	require.Equal(t, 1, len(jobs))
 	assert.Equal(t, createOutput.ID, jobs[0].ID)
 }
 
-func TestClient_CreateJobV2(t *testing.T) {
+func TestClient_ShowJob(t *testing.T) {
 	t.Parallel()
 
 	app := startNewApplication(t)
+	client, r := app.NewClientAndRenderer()
+
+	// Create the job
+	fs := flag.NewFlagSet("", flag.ExitOnError)
+	fs.Parse([]string{"../testdata/tomlspecs/direct-request-spec.toml"})
+	err := client.CreateJob(cli.NewContext(nil, fs, nil))
+	require.NoError(t, err)
+	require.Len(t, r.Renders, 1)
+	createOutput, ok := r.Renders[0].(*cmd.JobPresenter)
+	require.True(t, ok, "Expected Renders[0] to be *cmd.JobPresenter, got %T", r.Renders[0])
+
+	set := flag.NewFlagSet("test", 0)
+	set.Parse([]string{createOutput.ID})
+	c := cli.NewContext(nil, set, nil)
+
+	require.NoError(t, client.ShowJob(c))
+	job := *r.Renders[0].(*cmd.JobPresenter)
+	assert.Equal(t, createOutput.ID, job.ID)
+}
+
+func TestClient_CreateJobV2(t *testing.T) {
+	t.Parallel()
+
+	app := startNewApplication(t, withConfigSet(func(c *configtest.TestGeneralConfig) {
+		c.Overrides.SetTriggerFallbackDBPollInterval(100 * time.Millisecond)
+		c.Overrides.EVMDisabled = null.BoolFrom(false)
+		c.Overrides.GlobalEvmNonceAutoSync = null.BoolFrom(false)
+		c.Overrides.GlobalBalanceMonitorEnabled = null.BoolFrom(false)
+		c.Overrides.GlobalGasEstimatorMode = null.StringFrom("FixedPrice")
+	}))
 	client, r := app.NewClientAndRenderer()
 
 	requireJobsCount(t, app.JobORM(), 0)
 
 	fs := flag.NewFlagSet("", flag.ExitOnError)
 	fs.Parse([]string{"../testdata/tomlspecs/ocr-bootstrap-spec.toml"})
-	err := client.CreateJobV2(cli.NewContext(nil, fs, nil))
+	err := client.CreateJob(cli.NewContext(nil, fs, nil))
 	require.NoError(t, err)
 
 	requireJobsCount(t, app.JobORM(), 1)
@@ -307,16 +341,22 @@ func TestClient_CreateJobV2(t *testing.T) {
 	assert.Equal(t, "0x27548a32b9aD5D64c5945EaE9Da5337bc3169D15", output.OffChainReportingSpec.ContractAddress.String())
 }
 
-func TestClient_DeleteJobV2(t *testing.T) {
+func TestClient_DeleteJob(t *testing.T) {
 	t.Parallel()
 
-	app := startNewApplication(t, withConfig(map[string]interface{}{"TRIGGER_FALLBACK_DB_POLL_INTERVAL": "10ms"}))
+	app := startNewApplication(t, withConfigSet(func(c *configtest.TestGeneralConfig) {
+		c.Overrides.SetTriggerFallbackDBPollInterval(100 * time.Millisecond)
+		c.Overrides.EVMDisabled = null.BoolFrom(false)
+		c.Overrides.GlobalEvmNonceAutoSync = null.BoolFrom(false)
+		c.Overrides.GlobalBalanceMonitorEnabled = null.BoolFrom(false)
+		c.Overrides.GlobalGasEstimatorMode = null.StringFrom("FixedPrice")
+	}))
 	client, r := app.NewClientAndRenderer()
 
 	// Create the job
 	fs := flag.NewFlagSet("", flag.ExitOnError)
 	fs.Parse([]string{"../testdata/tomlspecs/direct-request-spec.toml"})
-	err := client.CreateJobV2(cli.NewContext(nil, fs, nil))
+	err := client.CreateJob(cli.NewContext(nil, fs, nil))
 	require.NoError(t, err)
 	require.NotEmpty(t, r.Renders)
 
@@ -332,12 +372,12 @@ func TestClient_DeleteJobV2(t *testing.T) {
 	// Must supply job id
 	set := flag.NewFlagSet("test", 0)
 	c := cli.NewContext(nil, set, nil)
-	require.Equal(t, "must pass the job id to be archived", client.DeleteJobV2(c).Error())
+	require.Equal(t, "must pass the job id to be archived", client.DeleteJob(c).Error())
 
 	set = flag.NewFlagSet("test", 0)
 	set.Parse([]string{output.ID})
 	c = cli.NewContext(nil, set, nil)
-	require.NoError(t, client.DeleteJobV2(c))
+	require.NoError(t, client.DeleteJob(c))
 
 	requireJobsCount(t, app.JobORM(), 0)
 }
@@ -346,31 +386,4 @@ func requireJobsCount(t *testing.T, orm job.ORM, expected int) {
 	jobs, _, err := orm.JobsV2(0, 1000)
 	require.NoError(t, err)
 	require.Len(t, jobs, expected)
-}
-
-func TestClient_Migrate(t *testing.T) {
-	t.Parallel()
-
-	app := startNewApplication(t)
-	app.Config.Set("FEATURE_FLUX_MONITOR_V2", true)
-	app.Config.Set("ENABLE_LEGACY_JOB_PIPELINE", true)
-	client, _ := app.NewClientAndRenderer()
-	cltest.CreateBridgeTypeViaWeb(t, app, `{"name":"testbridge","url":"http://data.com"}`)
-
-	// Create a v1 job.
-	set := flag.NewFlagSet("create", 0)
-	set.Parse([]string{"../testdata/jsonspecs/flux_monitor_bridge_job.json"})
-	c := cli.NewContext(nil, set, nil)
-	require.NoError(t, client.CreateJobSpec(c))
-
-	// Migrate v1 job to v2 using the cli.
-	var js models.JobSpec
-	err := app.Store.Jobs(func(spec *models.JobSpec) bool {
-		js = *spec
-		return true
-	})
-	require.NoError(t, err)
-	set = flag.NewFlagSet("test", 0)
-	set.Parse([]string{js.ID.String()})
-	require.NoError(t, client.Migrate(cli.NewContext(nil, set, nil)))
 }

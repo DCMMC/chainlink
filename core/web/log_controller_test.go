@@ -8,13 +8,15 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/bmizerany/assert"
 	"github.com/DCMMC/chainlink/core/internal/cltest"
 	"github.com/DCMMC/chainlink/core/logger"
+	"github.com/DCMMC/chainlink/core/store/config"
 	"github.com/DCMMC/chainlink/core/web"
 	"github.com/DCMMC/chainlink/core/web/presenters"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap/zapcore"
+	"gopkg.in/guregu/null.v4"
 )
 
 type testCase struct {
@@ -33,20 +35,16 @@ type testCase struct {
 func TestLogController_GetLogConfig(t *testing.T) {
 	t.Parallel()
 
-	ethClient, _, assertMocksCalled := cltest.NewEthMocksWithStartupAssertions(t)
-	defer assertMocksCalled()
-	app, cleanup := cltest.NewApplicationWithKey(t,
-		ethClient,
-	)
-
-	// Set log config values
-	logLevel := "warn"
+	cfg := cltest.NewTestGeneralConfig(t)
+	cfg.Overrides.EthereumDisabled = null.BoolFrom(true)
+	logLevel := config.LogLevel{Level: zapcore.WarnLevel}
+	cfg.Overrides.LogLevel = &logLevel
 	sqlEnabled := true
-	app.GetStore().Config.Set("LOG_LEVEL", logLevel)
-	app.GetStore().Config.Set("LOG_SQL", sqlEnabled)
+	cfg.Overrides.LogSQLStatements = null.BoolFrom(sqlEnabled)
 
-	defer cleanup()
+	app := cltest.NewApplicationWithConfig(t, cfg)
 	require.NoError(t, app.Start())
+
 	client := app.NewHTTPClient()
 
 	resp, err := client.HTTPClient.Get("/v2/log")
@@ -59,7 +57,7 @@ func TestLogController_GetLogConfig(t *testing.T) {
 	for i, svcName := range svcLogConfig.ServiceName {
 
 		if svcName == "Global" {
-			assert.Equal(t, svcLogConfig.LogLevel[i], logLevel)
+			assert.Equal(t, svcLogConfig.LogLevel[i], logLevel.String())
 		}
 
 		if svcName == "IsSqlEnabled" {
@@ -70,15 +68,6 @@ func TestLogController_GetLogConfig(t *testing.T) {
 
 func TestLogController_PatchLogConfig(t *testing.T) {
 	t.Parallel()
-
-	ethClient, _, assertMocksCalled := cltest.NewEthMocksWithStartupAssertions(t)
-	defer assertMocksCalled()
-	app, cleanup := cltest.NewApplicationWithKey(t,
-		ethClient,
-	)
-	defer cleanup()
-	require.NoError(t, app.Start())
-	client := app.NewHTTPClient()
 
 	sqlTrue := true
 	sqlFalse := false
@@ -119,7 +108,7 @@ func TestLogController_PatchLogConfig(t *testing.T) {
 			expectedErrorCode: http.StatusBadRequest,
 		},
 		{
-			Description: "Set head tracker to debug",
+			Description: "Set head tracker to info",
 			logLevel:    "info",
 
 			svcName:  strings.Join([]string{logger.HeadTracker}, ","),
@@ -139,82 +128,103 @@ func TestLogController_PatchLogConfig(t *testing.T) {
 			expectedSvcLevel: map[string]zapcore.Level{logger.FluxMonitor: zapcore.WarnLevel},
 		},
 		{
+			Description: "Set keeper to info",
+			logLevel:    "info",
+
+			svcName:  strings.Join([]string{logger.Keeper}, ","),
+			svcLevel: strings.Join([]string{"info"}, ","),
+
+			expectedLogLevel: zapcore.InfoLevel,
+			expectedSvcLevel: map[string]zapcore.Level{logger.Keeper: zapcore.InfoLevel},
+		},
+		{
 			Description: "Set multiple services log levels",
 			logLevel:    "info",
 
-			svcName:  strings.Join([]string{logger.HeadTracker, logger.FluxMonitor}, ","),
-			svcLevel: strings.Join([]string{"debug", "warn"}, ","),
+			svcName:  strings.Join([]string{logger.HeadTracker, logger.FluxMonitor, logger.Keeper}, ","),
+			svcLevel: strings.Join([]string{"debug", "warn", "info"}, ","),
 
 			expectedLogLevel: zapcore.InfoLevel,
-			expectedSvcLevel: map[string]zapcore.Level{logger.HeadTracker: zapcore.DebugLevel, logger.FluxMonitor: zapcore.WarnLevel},
+			expectedSvcLevel: map[string]zapcore.Level{
+				logger.HeadTracker: zapcore.DebugLevel,
+				logger.FluxMonitor: zapcore.WarnLevel,
+				logger.Keeper:      zapcore.InfoLevel,
+			},
 		},
 		{
 			Description: "Set incorrect log levels",
 			logLevel:    "info",
 
-			svcName:  strings.Join([]string{logger.HeadTracker, logger.FluxMonitor}, ","),
-			svcLevel: strings.Join([]string{"debug", "warning"}, ","),
+			svcName:  strings.Join([]string{logger.HeadTracker, logger.FluxMonitor, logger.Keeper}, ","),
+			svcLevel: strings.Join([]string{"debug", "warning", "infa"}, ","),
 
-			expectedErrorCode: http.StatusInternalServerError,
+			expectedErrorCode: http.StatusBadRequest,
 		},
 		{
 			Description: "Set incorrect service names",
 			logLevel:    "info",
 
-			svcName:  strings.Join([]string{logger.HeadTracker, "FLUX-MONITOR"}, ","),
-			svcLevel: strings.Join([]string{"debug", "warning"}, ","),
+			svcName:  strings.Join([]string{logger.HeadTracker, "FLUX-MONITOR", "SHKEEPER"}, ","),
+			svcLevel: strings.Join([]string{"debug", "warning", "info"}, ","),
 
-			expectedErrorCode: http.StatusInternalServerError,
+			expectedErrorCode: http.StatusBadRequest,
 		},
 	}
 
 	for _, tc := range cases {
-		request := web.LogPatchRequest{Level: tc.logLevel, SqlEnabled: tc.logSql}
+		tc := tc
+		t.Run(tc.Description, func(t *testing.T) {
+			app := cltest.NewApplicationEVMDisabled(t)
+			require.NoError(t, app.Start())
+			client := app.NewHTTPClient()
 
-		if tc.svcName != "" {
-			svcs := strings.Split(tc.svcName, ",")
-			lvls := strings.Split(tc.svcLevel, ",")
+			request := web.LogPatchRequest{Level: tc.logLevel, SqlEnabled: tc.logSql}
 
-			serviceLogLevel := make([][2]string, len(svcs))
+			if tc.svcName != "" {
+				svcs := strings.Split(tc.svcName, ",")
+				lvls := strings.Split(tc.svcLevel, ",")
 
-			for i, p := range svcs {
-				serviceLogLevel[i][0] = p
-				serviceLogLevel[i][1] = lvls[i]
+				serviceLogLevel := make([][2]string, len(svcs))
+
+				for i, p := range svcs {
+					serviceLogLevel[i][0] = p
+					serviceLogLevel[i][1] = lvls[i]
+				}
+				request.ServiceLogLevel = serviceLogLevel
 			}
-			request.ServiceLogLevel = serviceLogLevel
-		}
 
-		requestData, _ := json.Marshal(request)
-		buf := bytes.NewBuffer(requestData)
+			requestData, _ := json.Marshal(request)
+			buf := bytes.NewBuffer(requestData)
 
-		resp, cleanup := client.Patch("/v2/log", buf)
-		defer cleanup()
+			resp, cleanup := client.Patch("/v2/log", buf)
+			defer cleanup()
 
-		svcLogConfig := presenters.ServiceLogConfigResource{}
-		if tc.expectedErrorCode != 0 {
-			cltest.AssertServerResponse(t, resp, tc.expectedErrorCode)
-		} else {
-			cltest.AssertServerResponse(t, resp, http.StatusOK)
-			require.NoError(t, cltest.ParseJSONAPIResponse(t, resp, &svcLogConfig))
+			svcLogConfig := presenters.ServiceLogConfigResource{}
+			if tc.expectedErrorCode != 0 {
+				cltest.AssertServerResponse(t, resp, tc.expectedErrorCode)
+			} else {
+				cltest.AssertServerResponse(t, resp, http.StatusOK)
+				require.NoError(t, cltest.ParseJSONAPIResponse(t, resp, &svcLogConfig))
 
-			for i, svcName := range svcLogConfig.ServiceName {
+				for i, svcName := range svcLogConfig.ServiceName {
 
-				if svcName == "Global" {
-					assert.Equal(t, tc.expectedLogLevel.String(), svcLogConfig.LogLevel[i])
-				}
+					if svcName == "Global" {
+						assert.Equal(t, tc.expectedLogLevel.String(), svcLogConfig.LogLevel[i])
+					}
 
-				if svcName == "IsSqlEnabled" {
-					assert.Equal(t, strconv.FormatBool(tc.expectedLogSQL), svcLogConfig.LogLevel[i])
-				}
+					if svcName == "IsSqlEnabled" {
+						assert.Equal(t, strconv.FormatBool(tc.expectedLogSQL), svcLogConfig.LogLevel[i])
+					}
 
-				if svcName == logger.HeadTracker {
-					assert.Equal(t, tc.expectedSvcLevel[logger.HeadTracker].String(), svcLogConfig.LogLevel[i])
-				}
+					if svcName == logger.HeadTracker {
+						assert.Equal(t, tc.expectedSvcLevel[logger.HeadTracker].String(), svcLogConfig.LogLevel[i])
+					}
 
-				if svcName == logger.FluxMonitor {
-					assert.Equal(t, tc.expectedSvcLevel[logger.FluxMonitor].String(), svcLogConfig.LogLevel[i])
+					if svcName == logger.FluxMonitor {
+						assert.Equal(t, tc.expectedSvcLevel[logger.FluxMonitor].String(), svcLogConfig.LogLevel[i])
+					}
 				}
 			}
-		}
+		})
 	}
 }

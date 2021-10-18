@@ -1,13 +1,14 @@
 package pipeline_test
 
 import (
+	"encoding/json"
 	"testing"
 	"time"
 
 	"github.com/DCMMC/chainlink/core/services/pipeline"
 
-	"github.com/bmizerany/assert"
 	"github.com/DCMMC/chainlink/core/internal/cltest"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
@@ -50,7 +51,53 @@ func Test_TaskAnyUnmarshal(t *testing.T) {
 	require.Len(t, p.Tasks, 1)
 	_, ok := p.Tasks[0].(*pipeline.AnyTask)
 	require.True(t, ok)
-	require.Equal(t, "true", p.Tasks[0].Base().FailEarly)
+	require.Equal(t, true, p.Tasks[0].Base().FailEarly)
+}
+
+func Test_RetryUnmarshal(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name    string
+		spec    string
+		retries uint32
+		min     time.Duration
+		max     time.Duration
+	}{
+		{
+
+			"nothing specified",
+			`ds1 [type=any];`,
+			0,
+			time.Second * 5,
+			time.Minute,
+		},
+		{
+
+			"only retry specified",
+			`ds1 [type=any retries=5];`,
+			5,
+			time.Second * 5,
+			time.Minute,
+		},
+		{
+			"all params set",
+			`ds1 [type=http retries=10 minBackoff="1s" maxBackoff="30m"];`,
+			10,
+			time.Second,
+			time.Minute * 30,
+		},
+	}
+
+	for _, test := range tests {
+		p, err := pipeline.Parse(test.spec)
+		require.NoError(t, err)
+		require.Len(t, p.Tasks, 1)
+		require.Equal(t, test.retries, p.Tasks[0].TaskRetries())
+		require.Equal(t, test.min, p.Tasks[0].TaskMinBackoff())
+		require.Equal(t, test.max, p.Tasks[0].TaskMaxBackoff())
+	}
+
 }
 
 func Test_UnmarshalTaskFromMap(t *testing.T) {
@@ -69,4 +116,42 @@ func Test_UnmarshalTaskFromMap(t *testing.T) {
 		require.Error(t, err)
 		require.Contains(t, err.Error(), "UnmarshalTaskFromMap: UnmarshalTaskFromMap only accepts a map[string]interface{} or a map[string]string")
 	})
+}
+
+func TestUnmarshalJSONSerializable_Valid(t *testing.T) {
+	tests := []struct {
+		name, input string
+		expected    interface{}
+	}{
+		{"bool", `true`, true},
+		{"string", `"foo"`, "foo"},
+		{"raw", `{"foo": 42}`, map[string]interface{}{"foo": float64(42)}},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			var i pipeline.JSONSerializable
+			err := json.Unmarshal([]byte(test.input), &i)
+			require.NoError(t, err)
+			assert.True(t, i.Valid)
+			assert.Equal(t, test.expected, i.Val)
+		})
+	}
+}
+
+func TestUnmarshalJSONSerializable_Invalid(t *testing.T) {
+	tests := []struct {
+		name, input string
+	}{
+		{"null json", `null`},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			var i pipeline.JSONSerializable
+			err := json.Unmarshal([]byte(test.input), &i)
+			require.NoError(t, err)
+			assert.False(t, i.Valid)
+		})
+	}
 }

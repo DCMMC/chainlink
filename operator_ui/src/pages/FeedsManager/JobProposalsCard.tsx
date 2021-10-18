@@ -1,10 +1,5 @@
 import React from 'react'
 
-import { v2 } from 'api'
-import Link from 'components/Link'
-import * as models from 'core/store/models'
-import { tableStyles } from 'components/Table'
-
 import Card from '@material-ui/core/Card'
 import CardHeader from '@material-ui/core/CardHeader'
 import { createStyles, WithStyles, withStyles } from '@material-ui/core/styles'
@@ -17,10 +12,17 @@ import TableHead from '@material-ui/core/TableHead'
 import TableRow from '@material-ui/core/TableRow'
 import { TimeAgo } from 'src/components/TimeAgo'
 
+import { v2 } from 'api'
+import Link from 'components/Link'
+import { JobProposal, Resource } from 'core/store/models'
+import { SearchTextField } from 'src/components/SearchTextField'
+import { tableStyles } from 'components/Table'
+
 const tabToStatus: { [key: number]: string } = {
   0: 'pending',
   1: 'approved',
   2: 'rejected',
+  3: 'cancelled',
 }
 
 const styles = () => {
@@ -31,14 +33,10 @@ const styles = () => {
   })
 }
 
-interface JobProposal {
-  attributes: models.JobProposal
-  id: string
-  type: string
-}
+type JobProposalResource = Resource<JobProposal>
 
 interface JobProposalRowProps extends WithStyles<typeof tableStyles> {
-  proposal: JobProposal
+  proposal: JobProposalResource
 }
 
 const JobProposalRow = withStyles(tableStyles)(
@@ -53,18 +51,47 @@ const JobProposalRow = withStyles(tableStyles)(
 
         <TableCell>{proposal.attributes.external_job_id || 'N/A'}</TableCell>
         <TableCell>
-          <TimeAgo tooltip>{proposal.attributes.createdAt}</TimeAgo>
+          <TimeAgo tooltip>{proposal.attributes.proposedAt}</TimeAgo>
         </TableCell>
       </TableRow>
     )
   },
 )
 
+const searchIncludes = (searchParam: string) => {
+  const lowerCaseSearchParam = searchParam.toLowerCase()
+
+  return (stringToSearch: string) => {
+    return stringToSearch.toLowerCase().includes(lowerCaseSearchParam)
+  }
+}
+
+export const search = (term: string) => (proposal: JobProposalResource) => {
+  if (term === '') {
+    return true
+  }
+
+  return matchSimple(proposal, term)
+}
+
+// matchSimple does a simple match on the id
+function matchSimple(proposal: JobProposalResource, term: string) {
+  const match = searchIncludes(term)
+
+  const dataset: string[] = [proposal.id]
+  if (proposal.attributes.external_job_id != null) {
+    dataset.push(proposal.attributes.external_job_id)
+  }
+
+  return dataset.some(match)
+}
+
 interface Props extends WithStyles<typeof styles> {}
 
 export const JobProposalsCard = withStyles(styles)(({ classes }: Props) => {
   const [tabValue, setTabValue] = React.useState(0)
-  const [proposals, setProposals] = React.useState<JobProposal[]>()
+  const [proposals, setProposals] = React.useState<JobProposalResource[]>()
+  const [searchTerm, setSearchTerm] = React.useState('')
 
   React.useEffect(() => {
     v2.jobProposals.getJobProposals().then((res) => {
@@ -72,19 +99,23 @@ export const JobProposalsCard = withStyles(styles)(({ classes }: Props) => {
     })
   }, [])
 
-  const filteredProposals: JobProposal[] = React.useMemo(() => {
+  const filteredProposals: JobProposalResource[] = React.useMemo(() => {
     if (!proposals) {
       return []
     }
 
     return proposals.filter(
-      (p) => p.attributes.status === tabToStatus[tabValue],
+      (p) =>
+        p.attributes.status === tabToStatus[tabValue] && search(searchTerm)(p),
     )
-  }, [tabValue, proposals])
+  }, [tabValue, proposals, searchTerm])
 
   return (
     <Card>
-      <CardHeader title="Job Proposals" />
+      <CardHeader
+        title="Job Proposals"
+        action={<SearchTextField value={searchTerm} onChange={setSearchTerm} />}
+      />
 
       <Tabs
         value={tabValue}
@@ -97,6 +128,7 @@ export const JobProposalsCard = withStyles(styles)(({ classes }: Props) => {
         <Tab label="Pending" />
         <Tab label="Approved" />
         <Tab label="Rejected" />
+        <Tab label="Cancelled" />
       </Tabs>
 
       <Table>

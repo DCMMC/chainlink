@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/DCMMC/chainlink/core/auth"
+	"github.com/DCMMC/chainlink/core/bridges"
 	"github.com/DCMMC/chainlink/core/store/models"
 )
 
@@ -20,7 +21,7 @@ type ExternalInitiatorAuthentication struct {
 
 // NewExternalInitiatorAuthentication creates an instance of ExternalInitiatorAuthentication.
 func NewExternalInitiatorAuthentication(
-	ei models.ExternalInitiator,
+	ei bridges.ExternalInitiator,
 	eia auth.Token,
 ) *ExternalInitiatorAuthentication {
 	var result = &ExternalInitiatorAuthentication{
@@ -63,7 +64,7 @@ type ExternalInitiatorResource struct {
 	UpdatedAt     time.Time      `json:"updatedAt"`
 }
 
-func NewExternalInitiatorResource(ei models.ExternalInitiator) ExternalInitiatorResource {
+func NewExternalInitiatorResource(ei bridges.ExternalInitiator) ExternalInitiatorResource {
 	return ExternalInitiatorResource{
 		JAID:          NewJAID(fmt.Sprintf("%d", ei.ID)),
 		Name:          ei.Name,

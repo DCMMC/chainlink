@@ -5,7 +5,7 @@ import (
 	"time"
 
 	"github.com/manyminds/api2go/jsonapi"
-	"github.com/DCMMC/chainlink/core/store/models"
+	"github.com/DCMMC/chainlink/core/sessions"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -15,7 +15,7 @@ func TestUserResource(t *testing.T) {
 		ts = time.Date(2000, 1, 1, 0, 0, 0, 0, time.UTC)
 	)
 
-	user := models.User{
+	user := sessions.User{
 		Email:     "notreal@fakeemail.ch",
 		CreatedAt: ts,
 	}

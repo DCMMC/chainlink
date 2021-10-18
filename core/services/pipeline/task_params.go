@@ -2,10 +2,12 @@ package pipeline
 
 import (
 	"bytes"
+	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"math"
+	"math/big"
 	"net/url"
 	"strconv"
 	"strings"
@@ -208,9 +210,21 @@ func (s *StringParam) UnmarshalPipelineParam(val interface{}) error {
 	case []byte:
 		*s = StringParam(string(v))
 		return nil
-	default:
-		return ErrBadInput
+
+	case ObjectParam:
+		if v.Type == StringType {
+			*s = v.StringValue
+			return nil
+		}
+
+	case *ObjectParam:
+		if v.Type == StringType {
+			*s = v.StringValue
+			return nil
+		}
+
 	}
+	return errors.Wrapf(ErrBadInput, "expected string, got %T", val)
 }
 
 type BytesParam []byte
@@ -226,13 +240,18 @@ func (b *BytesParam) UnmarshalPipelineParam(val interface{}) error {
 			*b = BytesParam(bs)
 			return nil
 		}
-		*b = BytesParam(v)
+		// try decoding as base64 first, in case this is a string from the database
+		bs, err := base64.StdEncoding.DecodeString(v)
+		if err != nil {
+			bs = []byte(v)
+		}
+		*b = BytesParam(bs)
 	case []byte:
 		*b = BytesParam(v)
 	case nil:
 		*b = BytesParam(nil)
 	default:
-		return ErrBadInput
+		return errors.Wrapf(ErrBadInput, "expected array of bytes, got %T", val)
 	}
 	return nil
 }
@@ -261,6 +280,8 @@ func (u *Uint64Param) UnmarshalPipelineParam(val interface{}) error {
 		*u = Uint64Param(v)
 	case int64:
 		*u = Uint64Param(v)
+	case float64: // when decoding from db: JSON numbers are floats
+		*u = Uint64Param(v)
 	case string:
 		n, err := strconv.ParseUint(v, 10, 64)
 		if err != nil {
@@ -268,7 +289,7 @@ func (u *Uint64Param) UnmarshalPipelineParam(val interface{}) error {
 		}
 		*u = Uint64Param(n)
 	default:
-		return ErrBadInput
+		return errors.Wrapf(ErrBadInput, "expected unsiend integer, got %T", val)
 	}
 	return nil
 }
@@ -301,6 +322,8 @@ func (p *MaybeUint64Param) UnmarshalPipelineParam(val interface{}) error {
 		n = uint64(v)
 	case int64:
 		n = uint64(v)
+	case float64: // when decoding from db: JSON numbers are floats
+		n = uint64(v)
 	case string:
 		if strings.TrimSpace(v) == "" {
 			*p = MaybeUint64Param{0, false}
@@ -313,7 +336,7 @@ func (p *MaybeUint64Param) UnmarshalPipelineParam(val interface{}) error {
 		}
 
 	default:
-		return ErrBadInput
+		return errors.Wrapf(ErrBadInput, "expected unsigned integer or nil, got %T", val)
 	}
 
 	*p = MaybeUint64Param{n, true}
@@ -367,6 +390,11 @@ func (p *MaybeInt32Param) UnmarshalPipelineParam(val interface{}) error {
 			return errors.Wrap(ErrBadInput, "overflows int32")
 		}
 		n = int32(v)
+	case float64: // when decoding from db: JSON numbers are floats
+		if v > math.MaxInt32 || v < math.MinInt32 {
+			return errors.Wrap(ErrBadInput, "overflows int32")
+		}
+		n = int32(v)
 	case string:
 		if strings.TrimSpace(v) == "" {
 			*p = MaybeInt32Param{0, false}
@@ -379,7 +407,7 @@ func (p *MaybeInt32Param) UnmarshalPipelineParam(val interface{}) error {
 		n = int32(i)
 
 	default:
-		return ErrBadInput
+		return errors.Wrapf(ErrBadInput, "expected signed integer or nil, got %T", val)
 	}
 
 	*p = MaybeInt32Param{n, true}
@@ -404,14 +432,33 @@ func (b *BoolParam) UnmarshalPipelineParam(val interface{}) error {
 	case bool:
 		*b = BoolParam(v)
 		return nil
-	default:
-		return ErrBadInput
+
+	case ObjectParam:
+		if v.Type == BoolType {
+			*b = v.BoolValue
+			return nil
+		}
+
+	case *ObjectParam:
+		if v.Type == BoolType {
+			*b = v.BoolValue
+			return nil
+		}
+
 	}
+	return errors.Wrapf(ErrBadInput, "expected true or false, got %T", val)
 }
 
 type DecimalParam decimal.Decimal
 
 func (d *DecimalParam) UnmarshalPipelineParam(val interface{}) error {
+	if v, ok := val.(ObjectParam); ok && v.Type == DecimalType {
+		*d = v.DecimalValue
+		return nil
+	} else if v, ok := val.(*ObjectParam); ok && v.Type == DecimalType {
+		*d = v.DecimalValue
+		return nil
+	}
 	x, err := utils.ToDecimal(val)
 	if err != nil {
 		return errors.Wrap(ErrBadInput, err.Error())
@@ -467,6 +514,7 @@ func (a *AddressParam) UnmarshalPipelineParam(val interface{}) error {
 	return nil
 }
 
+// MapParam accepts maps or JSON-encoded strings
 type MapParam map[string]interface{}
 
 func (m *MapParam) UnmarshalPipelineParam(val interface{}) error {
@@ -495,9 +543,25 @@ func (m *MapParam) UnmarshalPipelineParam(val interface{}) error {
 		*m = MapParam(theMap)
 		return nil
 
-	default:
-		return ErrBadInput
+	case ObjectParam:
+		if v.Type == MapType {
+			*m = v.MapValue
+			return nil
+		}
+
+	case *ObjectParam:
+		if v.Type == MapType {
+			*m = v.MapValue
+			return nil
+		}
+
 	}
+
+	return errors.Wrapf(ErrBadInput, "expected map, got %T", val)
+}
+
+func (m MapParam) Map() map[string]interface{} {
+	return (map[string]interface{})(m)
 }
 
 type SliceParam []interface{}
@@ -506,8 +570,10 @@ func (s *SliceParam) UnmarshalPipelineParam(val interface{}) error {
 	switch v := val.(type) {
 	case nil:
 		*s = nil
+		return nil
 	case []interface{}:
 		*s = v
+		return nil
 	case string:
 		return s.UnmarshalPipelineParam([]byte(v))
 
@@ -519,11 +585,9 @@ func (s *SliceParam) UnmarshalPipelineParam(val interface{}) error {
 		}
 		*s = SliceParam(theSlice)
 		return nil
-
-	default:
-		return ErrBadInput
 	}
-	return nil
+
+	return errors.Wrapf(ErrBadInput, "expected slice, got %T", val)
 }
 
 func (s SliceParam) FilterErrors() (SliceParam, int) {
@@ -552,11 +616,12 @@ func (s *DecimalSliceParam) UnmarshalPipelineParam(val interface{}) error {
 		return s.UnmarshalPipelineParam(SliceParam(v))
 	case SliceParam:
 		for _, x := range v {
-			d, err := utils.ToDecimal(x)
+			var d DecimalParam
+			err := d.UnmarshalPipelineParam(x)
 			if err != nil {
-				return errors.Wrapf(ErrBadInput, "DecimalSliceParam: wrong type of value while decoding decimals: %v", err.Error())
+				return err
 			}
-			dsp = append(dsp, d)
+			dsp = append(dsp, d.Decimal())
 		}
 	case string:
 		return s.UnmarshalPipelineParam([]byte(v))
@@ -570,7 +635,7 @@ func (s *DecimalSliceParam) UnmarshalPipelineParam(val interface{}) error {
 		return s.UnmarshalPipelineParam(SliceParam(theSlice))
 
 	default:
-		return errors.Wrap(ErrBadInput, "DecimalSliceParam")
+		return errors.Wrapf(ErrBadInput, "expected number, got %T", val)
 	}
 	*s = dsp
 	return nil
@@ -594,6 +659,19 @@ func (s *HashSliceParam) UnmarshalPipelineParam(val interface{}) error {
 		err := json.Unmarshal(v, &dsp)
 		if err != nil {
 			return err
+		}
+	case []interface{}:
+		for _, h := range v {
+			if s, is := h.(string); is {
+				var hash common.Hash
+				err := hash.UnmarshalText([]byte(s))
+				if err != nil {
+					return errors.Wrapf(ErrBadInput, "HashSliceParam: %v", err)
+				}
+				dsp = append(dsp, hash)
+			} else {
+				return errors.Wrap(ErrBadInput, "HashSliceParam")
+			}
 		}
 	default:
 		return errors.Wrap(ErrBadInput, "HashSliceParam")
@@ -669,4 +747,59 @@ func (p *JSONPathParam) UnmarshalPipelineParam(val interface{}) error {
 	}
 	*p = ssp
 	return nil
+}
+
+type MaybeBigIntParam struct {
+	n *big.Int
+}
+
+func (p *MaybeBigIntParam) UnmarshalPipelineParam(val interface{}) error {
+	var n *big.Int
+	switch v := val.(type) {
+	case uint:
+		n = big.NewInt(0).SetUint64(uint64(v))
+	case uint8:
+		n = big.NewInt(0).SetUint64(uint64(v))
+	case uint16:
+		n = big.NewInt(0).SetUint64(uint64(v))
+	case uint32:
+		n = big.NewInt(0).SetUint64(uint64(v))
+	case uint64:
+		n = big.NewInt(0).SetUint64(v)
+	case int:
+		n = big.NewInt(int64(v))
+	case int8:
+		n = big.NewInt(int64(v))
+	case int16:
+		n = big.NewInt(int64(v))
+	case int32:
+		n = big.NewInt(int64(v))
+	case int64:
+		n = big.NewInt(int64(v))
+	case float64: // when decoding from db: JSON numbers are floats
+		n = big.NewInt(0).SetUint64(uint64(v))
+	case string:
+		if strings.TrimSpace(v) == "" {
+			*p = MaybeBigIntParam{n: nil}
+			return nil
+		}
+		var ok bool
+		n, ok = big.NewInt(0).SetString(v, 10)
+		if !ok {
+			return errors.Wrapf(ErrBadInput, "unable to convert %s to big.Int", v)
+		}
+	case *big.Int:
+		n = v
+	case nil:
+		*p = MaybeBigIntParam{n: nil}
+		return nil
+	default:
+		return ErrBadInput
+	}
+	*p = MaybeBigIntParam{n: n}
+	return nil
+}
+
+func (p MaybeBigIntParam) BigInt() *big.Int {
+	return p.n
 }

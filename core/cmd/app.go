@@ -5,6 +5,7 @@ import (
 	"os"
 	"regexp"
 
+	"github.com/DCMMC/chainlink/core/logger"
 	"github.com/DCMMC/chainlink/core/static"
 	"github.com/urfave/cli"
 )
@@ -35,6 +36,7 @@ func NewApp(client *Client) *cli.App {
 		if c.Bool("json") {
 			client.Renderer = RendererJSON{Writer: os.Stdout}
 		}
+		logger.InitLogger(logger.ProductionLogger(client.Config))
 		return nil
 	}
 	app.Commands = removeHidden([]cli.Command{
@@ -57,20 +59,6 @@ func NewApp(client *Client) *cli.App {
 							Usage: "text file holding the API email and password needed to create a session cookie",
 						},
 					},
-				},
-			},
-		},
-
-		{
-			Name:    "agreements",
-			Aliases: []string{"agree"},
-			Usage:   "Commands for handling service agreements",
-			Hidden:  !client.Config.Dev(),
-			Subcommands: []cli.Command{
-				{
-					Name:   "create",
-					Usage:  "Creates a Service Agreement",
-					Action: client.CreateServiceAgreement,
 				},
 			},
 		},
@@ -157,12 +145,16 @@ func NewApp(client *Client) *cli.App {
 				},
 				{
 					Name:   "setgasprice",
-					Usage:  "Set the minimum gas price to use for outgoing transactions",
-					Action: client.SetMinimumGasPrice,
+					Usage:  "Set the default gas price to use for outgoing transactions",
+					Action: client.SetEvmGasPriceDefault,
 					Flags: []cli.Flag{
 						cli.BoolFlag{
 							Name:  "gwei",
 							Usage: "Specify amount in gwei",
+						},
+						cli.StringFlag{
+							Name:  "evmChainID",
+							Usage: "(optional) specify the chain ID for which to make the update",
 						},
 					},
 				},
@@ -211,13 +203,13 @@ func NewApp(client *Client) *cli.App {
 		},
 
 		{
-			Name:  "job_specs",
-			Usage: "Commands for managing Job Specs (jobs V1)",
+			Name:  "jobs",
+			Usage: "Commands for managing Jobs",
 			Subcommands: []cli.Command{
 				{
 					Name:   "list",
 					Usage:  "List all jobs",
-					Action: client.IndexJobSpecs,
+					Action: client.ListJobs,
 					Flags: []cli.Flag{
 						cli.IntFlag{
 							Name:  "page",
@@ -227,55 +219,23 @@ func NewApp(client *Client) *cli.App {
 				},
 				{
 					Name:   "show",
-					Usage:  "Show a specific Job's details",
-					Action: client.ShowJobSpec,
+					Usage:  "Show a job",
+					Action: client.ShowJob,
 				},
 				{
 					Name:   "create",
-					Usage:  "Create Job from a Job Specification JSON",
-					Action: client.CreateJobSpec,
-				},
-				{
-					Name:   "archive",
-					Usage:  "Archive a Job and all its associated Runs",
-					Action: client.ArchiveJobSpec,
-				},
-			},
-		},
-		{
-			Name:  "jobs",
-			Usage: "Commands for managing Jobs (V2)",
-			Subcommands: []cli.Command{
-				{
-					Name:   "list",
-					Usage:  "List all V2 jobs",
-					Action: client.ListJobsV2,
-					Flags: []cli.Flag{
-						cli.IntFlag{
-							Name:  "page",
-							Usage: "page of results to display",
-						},
-					},
-				},
-				{
-					Name:   "create",
-					Usage:  "Create a V2 job",
-					Action: client.CreateJobV2,
+					Usage:  "Create a job",
+					Action: client.CreateJob,
 				},
 				{
 					Name:   "delete",
-					Usage:  "Delete a V2 job",
-					Action: client.DeleteJobV2,
+					Usage:  "Delete a job",
+					Action: client.DeleteJob,
 				},
 				{
 					Name:   "run",
-					Usage:  "Trigger a V2 job run",
+					Usage:  "Trigger a job run",
 					Action: client.TriggerPipelineRun,
-				},
-				{
-					Name:   "migrate",
-					Usage:  "Migrate a V1 job (JSON) to a V2 job (TOML)",
-					Action: client.Migrate,
 				},
 			},
 		},
@@ -291,6 +251,12 @@ func NewApp(client *Client) *cli.App {
 							Name:   "create",
 							Usage:  "Create an key in the node's keystore alongside the existing key; to create an original key, just run the node",
 							Action: client.CreateETHKey,
+							Flags: []cli.Flag{
+								cli.StringFlag{
+									Name:  "evmChainID",
+									Usage: "Chain ID for the key. If left blank, default chain will be used.",
+								},
+							},
 						},
 						{
 							Name:   "list",
@@ -319,6 +285,10 @@ func NewApp(client *Client) *cli.App {
 								cli.StringFlag{
 									Name:  "oldpassword, p",
 									Usage: "`FILE` containing the password used to encrypt the key in the JSON file",
+								},
+								cli.StringFlag{
+									Name:  "evmChainID",
+									Usage: "Chain ID for the key. If left blank, default chain will be used.",
 								},
 							},
 							Action: client.ImportETHKey,
@@ -512,7 +482,7 @@ func NewApp(client *Client) *cli.App {
 						{
 							Name: "delete",
 							Usage: "Archive or delete VRF key from memory and the database, if present. " +
-								"Note that V2 jobs referencing the removed key will also be removed.",
+								"Note that jobs referencing the removed key will also be removed.",
 							Flags: []cli.Flag{
 								cli.StringFlag{Name: "publicKey, pk"},
 								cli.BoolFlag{
@@ -530,19 +500,6 @@ func NewApp(client *Client) *cli.App {
 							Name: "list", Usage: "List the VRF keys",
 							Action: client.ListVRFKeys,
 						},
-						{
-							Name: "xxxCreateWeakKeyPeriodYesIReallyKnowWhatIAmDoingAndDoNotCareAboutThisKeyMaterialFallingIntoTheWrongHandsExclamationPointExclamationPointExclamationPointExclamationPointIAmAMasochistExclamationPointExclamationPointExclamationPointExclamationPointExclamationPoint",
-							Usage: format(`
-                               For testing purposes ONLY! DO NOT USE FOR ANY OTHER PURPOSE!
-
-                               Creates a key with weak key-derivation-function parameters, so that it can be
-                               decrypted quickly during tests. As a result, it would be cheap to brute-force
-                               the encryption password for the key, if the ciphertext fell into the wrong
-                               hands!`),
-							Flags:  append(flags("password, p"), flags("file, f")...),
-							Action: client.CreateAndExportWeakVRFKey,
-							Hidden: !client.Config.Dev(), // For when this suite gets promoted out of dev mode
-						},
 					},
 				},
 			},
@@ -558,12 +515,6 @@ func NewApp(client *Client) *cli.App {
 					Usage:       "Erase the *local node's* user and corresponding session to force recreation on next node launch.",
 					Description: "Does not work remotely over API.",
 					Action:      client.DeleteUser,
-				},
-				{
-					Name:    "import",
-					Aliases: []string{"i"},
-					Usage:   "Import a key file to use with the node",
-					Action:  client.ImportKey,
 				},
 				{
 					Name:   "setnextnonce",
@@ -629,17 +580,15 @@ func NewApp(client *Client) *cli.App {
 							Name:  "address, a",
 							Usage: "The address (in hex format) for the key which we want to rebroadcast transactions",
 						},
+						cli.StringFlag{
+							Name:  "evmChainID",
+							Usage: "Chain ID for which to rebroadcast transactions. If left blank, ETH_CHAIN_ID will be used.",
+						},
 						cli.Uint64Flag{
 							Name:  "gasLimit",
 							Usage: "OPTIONAL: gas limit to use for each transaction ",
 						},
 					},
-				},
-				{
-					Name:   "hard-reset",
-					Usage:  "Removes unstarted transactions, cancels pending transactions as well as deletes job runs. Use with caution, this command cannot be reverted! Only execute when the node is not started!",
-					Action: client.HardReset,
-					Flags:  []cli.Flag{},
 				},
 				{
 					Name:   "status",
@@ -678,10 +627,34 @@ func NewApp(client *Client) *cli.App {
 							Flags:  []cli.Flag{},
 						},
 						{
+							Name:   "status",
+							Usage:  "Display the current database migration status.",
+							Action: client.StatusDatabase,
+							Flags:  []cli.Flag{},
+						},
+						{
 							Name:   "migrate",
 							Usage:  "Migrate the database to the latest version.",
 							Action: client.MigrateDatabase,
 							Flags:  []cli.Flag{},
+						},
+						{
+							Name:   "rollback",
+							Usage:  "Roll back the database to a previous <version>. Rolls back a single migration if no version specified.",
+							Action: client.RollbackDatabase,
+							Flags:  []cli.Flag{},
+						},
+						{
+							Name:   "create-migration",
+							Usage:  "Create a new migration.",
+							Hidden: !client.Config.Dev(),
+							Action: client.CreateMigration,
+							Flags: []cli.Flag{
+								cli.StringFlag{
+									Name:  "type",
+									Usage: "set to `go` to generate a .go migration (instead of .sql)",
+								},
+							},
 						},
 					},
 				},
@@ -707,46 +680,6 @@ func NewApp(client *Client) *cli.App {
 					Name:   "list",
 					Usage:  "List all external initiators",
 					Action: client.IndexExternalInitiators,
-				},
-			},
-		},
-
-		{
-			Name:  "runs",
-			Usage: "Commands for managing Runs",
-			Subcommands: []cli.Command{
-				{
-					Name:        "create",
-					Aliases:     []string{"r"},
-					Usage:       "Create a new Run for a Job given an Job ID and optional JSON body",
-					Description: "Takes a Job ID and a JSON string or path to a JSON file",
-					Action:      client.CreateJobRun,
-				},
-				{
-					Name:   "list",
-					Usage:  "List all Runs",
-					Action: client.IndexJobRuns,
-					Flags: []cli.Flag{
-						cli.IntFlag{
-							Name:  "page",
-							Usage: "page of results to display",
-						},
-						cli.StringFlag{
-							Name:  "jobid",
-							Usage: "filter all Runs to match the given jobid",
-						},
-					},
-				},
-				{
-					Name:    "show",
-					Aliases: []string{"sr"},
-					Usage:   "Show a Run for a specific ID",
-					Action:  client.ShowJobRun,
-				},
-				{
-					Name:   "cancel",
-					Usage:  "Cancel a Run with a specified ID",
-					Action: client.CancelJobRun,
 				},
 			},
 		},
@@ -778,6 +711,93 @@ func NewApp(client *Client) *cli.App {
 				},
 			},
 		},
+		{
+			Name:  "chains",
+			Usage: "Commands for handling chain configuration",
+			Subcommands: cli.Commands{
+				{
+					Name:  "evm",
+					Usage: "Commands for handling EVM chains",
+					Subcommands: cli.Commands{
+						{
+							Name:   "create",
+							Usage:  "Create a new EVM chain",
+							Action: client.CreateChain,
+							Flags: []cli.Flag{
+								cli.Int64Flag{
+									Name:  "id",
+									Usage: "chain ID",
+								},
+							},
+						},
+						{
+							Name:   "delete",
+							Usage:  "Delete an EVM chain",
+							Action: client.RemoveChain,
+						},
+						{
+							Name:   "list",
+							Usage:  "List all chains",
+							Action: client.IndexChains,
+						},
+						{
+							Name:   "configure",
+							Usage:  "Configure an EVM chain",
+							Action: client.ConfigureChain,
+							Flags: []cli.Flag{
+								cli.Int64Flag{
+									Name:  "id",
+									Usage: "chain ID",
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+		{
+			Name:  "nodes",
+			Usage: "Commands for handling node configuration",
+			Subcommands: cli.Commands{
+				{
+					Name:   "create",
+					Usage:  "Create a new node",
+					Action: client.CreateNode,
+					Flags: []cli.Flag{
+						cli.StringFlag{
+							Name:  "name",
+							Usage: "node name",
+						},
+						cli.StringFlag{
+							Name:  "ws-url",
+							Usage: "Websocket URL",
+						},
+						cli.StringFlag{
+							Name:  "http-url",
+							Usage: "HTTP URL, optional",
+						},
+						cli.Int64Flag{
+							Name:  "chain-id",
+							Usage: "chain ID",
+						},
+						cli.StringFlag{
+							Name:  "type",
+							Usage: "primary|secondary",
+						},
+					},
+				},
+				{
+					Name:   "delete",
+					Usage:  "Delete a node",
+					Action: client.RemoveNode,
+				},
+				{
+					Name:   "list",
+					Usage:  "List all nodes",
+					Action: client.IndexNodes,
+				},
+			},
+		},
 	}...)
 	return app
 }
@@ -788,6 +808,3 @@ var whitespace = regexp.MustCompile(`\s+`)
 func format(s string) string {
 	return string(whitespace.ReplaceAll([]byte(s), []byte(" ")))
 }
-
-// flags is an abbreviated way to express a CLI flag
-func flags(s string) []cli.Flag { return []cli.Flag{cli.StringFlag{Name: s}} }

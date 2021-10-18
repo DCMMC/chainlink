@@ -4,10 +4,11 @@ import (
 	"os"
 
 	"github.com/pkg/errors"
+
 	"github.com/DCMMC/chainlink/core/cmd"
 	"github.com/DCMMC/chainlink/core/logger"
+	"github.com/DCMMC/chainlink/core/sessions"
 	"github.com/DCMMC/chainlink/core/store/config"
-	"github.com/DCMMC/chainlink/core/store/models"
 )
 
 func main() {
@@ -17,16 +18,17 @@ func main() {
 // Run runs the CLI, providing further command instructions by default.
 func Run(client *cmd.Client, args ...string) {
 	app := cmd.NewApp(client)
-	logger.WarnIf(app.Run(args))
+	logger.Default.WarnIf(app.Run(args), "Error running app")
 }
 
 // NewProductionClient configures an instance of the CLI to be used
 // in production.
 func NewProductionClient() *cmd.Client {
-	cfg := config.NewConfig()
+	cfg := config.NewGeneralConfig()
+
 	prompter := cmd.NewTerminalPrompter()
 	cookieAuth := cmd.NewSessionCookieAuthenticator(cfg, cmd.DiskCookieStore{Config: cfg})
-	sr := models.SessionRequest{}
+	sr := sessions.SessionRequest{}
 	sessionRequestBuilder := cmd.NewFileSessionRequestBuilder()
 	if credentialsFile := cfg.AdminCredentialsFile(); credentialsFile != "" {
 		var err error
