@@ -9,9 +9,9 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/smartcontractkit/chainlink/core/assets"
-	"github.com/smartcontractkit/chainlink/core/services/keystore/keys/p2pkey"
-	"github.com/smartcontractkit/chainlink/core/store/models"
+	"github.com/DCMMC/chainlink/core/assets"
+	"github.com/DCMMC/chainlink/core/services/keystore/keys/p2pkey"
+	"github.com/DCMMC/chainlink/core/store/models"
 	ocrnetworking "github.com/DCMMC/libocr/networking"
 )
 

@@ -5,8 +5,8 @@ import (
 	"sync"
 
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/smartcontractkit/chainlink/core/services/postgres"
-	"github.com/smartcontractkit/chainlink/core/store/models"
+	"github.com/DCMMC/chainlink/core/services/postgres"
+	"github.com/DCMMC/chainlink/core/store/models"
 )
 
 // TODO: Needs to be optimised to allow for in-memory reads and not hit the DB every time

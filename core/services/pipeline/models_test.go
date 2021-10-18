@@ -5,7 +5,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/smartcontractkit/chainlink/core/services/pipeline"
+	"github.com/DCMMC/chainlink/core/services/pipeline"
 	"github.com/stretchr/testify/assert"
 	"gopkg.in/guregu/null.v4"
 )

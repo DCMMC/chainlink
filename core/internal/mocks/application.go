@@ -5,41 +5,41 @@ package mocks
 import (
 	big "math/big"
 
-	config "github.com/smartcontractkit/chainlink/core/store/config"
+	config "github.com/DCMMC/chainlink/core/store/config"
 
 	context "context"
 
-	eth "github.com/smartcontractkit/chainlink/core/services/eth"
+	eth "github.com/DCMMC/chainlink/core/services/eth"
 
-	feeds "github.com/smartcontractkit/chainlink/core/services/feeds"
+	feeds "github.com/DCMMC/chainlink/core/services/feeds"
 
-	health "github.com/smartcontractkit/chainlink/core/services/health"
+	health "github.com/DCMMC/chainlink/core/services/health"
 
-	job "github.com/smartcontractkit/chainlink/core/services/job"
+	job "github.com/DCMMC/chainlink/core/services/job"
 
-	keystore "github.com/smartcontractkit/chainlink/core/services/keystore"
+	keystore "github.com/DCMMC/chainlink/core/services/keystore"
 
-	logger "github.com/smartcontractkit/chainlink/core/logger"
+	logger "github.com/DCMMC/chainlink/core/logger"
 
 	mock "github.com/stretchr/testify/mock"
 
-	models "github.com/smartcontractkit/chainlink/core/store/models"
+	models "github.com/DCMMC/chainlink/core/store/models"
 
 	null "gopkg.in/guregu/null.v4"
 
 	packr "github.com/gobuffalo/packr"
 
-	pipeline "github.com/smartcontractkit/chainlink/core/services/pipeline"
+	pipeline "github.com/DCMMC/chainlink/core/services/pipeline"
 
-	store "github.com/smartcontractkit/chainlink/core/store"
+	store "github.com/DCMMC/chainlink/core/store"
 
-	synchronization "github.com/smartcontractkit/chainlink/core/services/synchronization"
+	synchronization "github.com/DCMMC/chainlink/core/services/synchronization"
 
-	types "github.com/smartcontractkit/chainlink/core/services/headtracker/types"
+	types "github.com/DCMMC/chainlink/core/services/headtracker/types"
 
 	uuid "github.com/satori/go.uuid"
 
-	webhook "github.com/smartcontractkit/chainlink/core/services/webhook"
+	webhook "github.com/DCMMC/chainlink/core/services/webhook"
 
 	zapcore "go.uber.org/zap/zapcore"
 )

@@ -1,7 +1,7 @@
 package presenters
 
 import (
-	"github.com/smartcontractkit/chainlink/core/services/synchronization"
+	"github.com/DCMMC/chainlink/core/services/synchronization"
 )
 
 // ExplorerStatus represents the connected server and status of the connection

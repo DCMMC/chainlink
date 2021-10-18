@@ -8,7 +8,7 @@ import (
 	"strings"
 	"syscall"
 
-	"github.com/smartcontractkit/chainlink/core/logger"
+	"github.com/DCMMC/chainlink/core/logger"
 
 	"golang.org/x/term"
 )

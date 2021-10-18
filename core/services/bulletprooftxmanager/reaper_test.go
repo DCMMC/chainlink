@@ -4,9 +4,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/smartcontractkit/chainlink/core/internal/cltest"
-	"github.com/smartcontractkit/chainlink/core/services/bulletprooftxmanager"
-	"github.com/smartcontractkit/chainlink/core/services/bulletprooftxmanager/mocks"
+	"github.com/DCMMC/chainlink/core/internal/cltest"
+	"github.com/DCMMC/chainlink/core/services/bulletprooftxmanager"
+	"github.com/DCMMC/chainlink/core/services/bulletprooftxmanager/mocks"
 	"github.com/stretchr/testify/assert"
 )
 

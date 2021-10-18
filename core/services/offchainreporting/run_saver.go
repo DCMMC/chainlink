@@ -1,14 +1,14 @@
 package offchainreporting
 
 import (
-	"github.com/smartcontractkit/chainlink/core/services/postgres"
+	"github.com/DCMMC/chainlink/core/services/postgres"
 	"gorm.io/gorm"
 
-	"github.com/smartcontractkit/chainlink/core/gracefulpanic"
+	"github.com/DCMMC/chainlink/core/gracefulpanic"
 
-	"github.com/smartcontractkit/chainlink/core/logger"
-	"github.com/smartcontractkit/chainlink/core/services/pipeline"
-	"github.com/smartcontractkit/chainlink/core/utils"
+	"github.com/DCMMC/chainlink/core/logger"
+	"github.com/DCMMC/chainlink/core/services/pipeline"
+	"github.com/DCMMC/chainlink/core/utils"
 )
 
 type RunResultSaver struct {

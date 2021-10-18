@@ -5,9 +5,9 @@ import (
 	"strconv"
 	"testing"
 
-	"github.com/smartcontractkit/chainlink/core/internal/testutils/pgtest"
-	"github.com/smartcontractkit/chainlink/core/store/config"
-	"github.com/smartcontractkit/chainlink/core/store/models"
+	"github.com/DCMMC/chainlink/core/internal/testutils/pgtest"
+	"github.com/DCMMC/chainlink/core/store/config"
+	"github.com/DCMMC/chainlink/core/store/models"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )

@@ -6,7 +6,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/pkg/errors"
-	"github.com/smartcontractkit/chainlink/core/services/chainlink"
+	"github.com/DCMMC/chainlink/core/services/chainlink"
 )
 
 type ReplayController struct {

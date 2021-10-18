@@ -9,7 +9,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/smartcontractkit/chainlink/core/services/pipeline"
+	"github.com/DCMMC/chainlink/core/services/pipeline"
 )
 
 func TestMeanTask(t *testing.T) {

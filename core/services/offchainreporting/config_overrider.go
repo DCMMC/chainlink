@@ -9,9 +9,9 @@ import (
 	"time"
 
 	"github.com/pkg/errors"
-	"github.com/smartcontractkit/chainlink/core/logger"
-	"github.com/smartcontractkit/chainlink/core/services/keystore/keys/ethkey"
-	"github.com/smartcontractkit/chainlink/core/utils"
+	"github.com/DCMMC/chainlink/core/logger"
+	"github.com/DCMMC/chainlink/core/services/keystore/keys/ethkey"
+	"github.com/DCMMC/chainlink/core/utils"
 	ocrtypes "github.com/DCMMC/libocr/offchainreporting/types"
 )
 

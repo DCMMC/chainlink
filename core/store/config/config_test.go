@@ -5,9 +5,9 @@ import (
 	"os"
 	"testing"
 
-	"github.com/smartcontractkit/chainlink/core/assets"
-	"github.com/smartcontractkit/chainlink/core/internal/cltest"
-	"github.com/smartcontractkit/chainlink/core/store/config"
+	"github.com/DCMMC/chainlink/core/assets"
+	"github.com/DCMMC/chainlink/core/internal/cltest"
+	"github.com/DCMMC/chainlink/core/store/config"
 	"github.com/stretchr/testify/assert"
 )
 

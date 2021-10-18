@@ -3,9 +3,9 @@ package vrfkey
 import (
 	"testing"
 
-	"github.com/smartcontractkit/chainlink/core/services/signatures/secp256k1"
+	"github.com/DCMMC/chainlink/core/services/signatures/secp256k1"
 
-	"github.com/smartcontractkit/chainlink/core/services/signatures/cryptotest"
+	"github.com/DCMMC/chainlink/core/services/signatures/cryptotest"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"

@@ -7,13 +7,13 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/smartcontractkit/chainlink/core/assets"
-	"github.com/smartcontractkit/chainlink/core/services/eth"
-	"github.com/smartcontractkit/chainlink/core/store/config"
-	"github.com/smartcontractkit/chainlink/core/store/presenters"
+	"github.com/DCMMC/chainlink/core/assets"
+	"github.com/DCMMC/chainlink/core/services/eth"
+	"github.com/DCMMC/chainlink/core/store/config"
+	"github.com/DCMMC/chainlink/core/store/presenters"
 	"github.com/stretchr/testify/assert"
 
-	"github.com/smartcontractkit/chainlink/core/internal/cltest"
+	"github.com/DCMMC/chainlink/core/internal/cltest"
 	"github.com/stretchr/testify/require"
 )
 

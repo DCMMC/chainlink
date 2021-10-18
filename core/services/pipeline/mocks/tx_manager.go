@@ -4,7 +4,7 @@ package mocks
 
 import (
 	common "github.com/ethereum/go-ethereum/common"
-	bulletprooftxmanager "github.com/smartcontractkit/chainlink/core/services/bulletprooftxmanager"
+	bulletprooftxmanager "github.com/DCMMC/chainlink/core/services/bulletprooftxmanager"
 
 	gorm "gorm.io/gorm"
 

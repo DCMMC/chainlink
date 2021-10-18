@@ -3,8 +3,8 @@ package fluxmonitorv2_test
 import (
 	"testing"
 
-	"github.com/smartcontractkit/chainlink/core/internal/cltest"
-	"github.com/smartcontractkit/chainlink/core/services/fluxmonitorv2"
+	"github.com/DCMMC/chainlink/core/internal/cltest"
+	"github.com/DCMMC/chainlink/core/services/fluxmonitorv2"
 	"github.com/stretchr/testify/require"
 )
 

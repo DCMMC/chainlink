@@ -3,7 +3,7 @@ package fluxmonitorv2
 import (
 	"time"
 
-	"github.com/smartcontractkit/chainlink/core/assets"
+	"github.com/DCMMC/chainlink/core/assets"
 )
 
 // Config defines the Flux Monitor configuration.

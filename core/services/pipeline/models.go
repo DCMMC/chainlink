@@ -10,7 +10,7 @@ import (
 	"github.com/pkg/errors"
 	uuid "github.com/satori/go.uuid"
 
-	"github.com/smartcontractkit/chainlink/core/store/models"
+	"github.com/DCMMC/chainlink/core/store/models"
 
 	"gopkg.in/guregu/null.v4"
 )

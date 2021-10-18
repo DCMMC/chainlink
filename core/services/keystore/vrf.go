@@ -6,14 +6,14 @@ import (
 	"math/big"
 	"sync"
 
-	"github.com/smartcontractkit/chainlink/core/services/keystore/keys/vrfkey"
-	"github.com/smartcontractkit/chainlink/core/services/signatures/secp256k1"
+	"github.com/DCMMC/chainlink/core/services/keystore/keys/vrfkey"
+	"github.com/DCMMC/chainlink/core/services/signatures/secp256k1"
 	"gorm.io/gorm"
 
 	"github.com/pkg/errors"
 	"go.uber.org/multierr"
 
-	"github.com/smartcontractkit/chainlink/core/utils"
+	"github.com/DCMMC/chainlink/core/utils"
 )
 
 // ErrMatchingVRFKey is returned when Import attempts to import key with a

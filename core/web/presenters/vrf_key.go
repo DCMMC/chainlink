@@ -3,8 +3,8 @@ package presenters
 import (
 	"time"
 
-	"github.com/smartcontractkit/chainlink/core/logger"
-	"github.com/smartcontractkit/chainlink/core/services/keystore/keys/vrfkey"
+	"github.com/DCMMC/chainlink/core/logger"
+	"github.com/DCMMC/chainlink/core/services/keystore/keys/vrfkey"
 )
 
 type VRFKeyResource struct {

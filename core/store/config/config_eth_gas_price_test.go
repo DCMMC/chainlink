@@ -4,8 +4,8 @@ import (
 	"math/big"
 	"testing"
 
-	"github.com/smartcontractkit/chainlink/core/internal/cltest"
-	"github.com/smartcontractkit/chainlink/core/store/config"
+	"github.com/DCMMC/chainlink/core/internal/cltest"
+	"github.com/DCMMC/chainlink/core/store/config"
 
 	"github.com/stretchr/testify/require"
 )

@@ -4,9 +4,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/smartcontractkit/chainlink/core/internal/gethwrappers/generated/flux_aggregator_wrapper"
-	"github.com/smartcontractkit/chainlink/core/logger"
-	"github.com/smartcontractkit/chainlink/core/services/fluxmonitorv2"
+	"github.com/DCMMC/chainlink/core/internal/gethwrappers/generated/flux_aggregator_wrapper"
+	"github.com/DCMMC/chainlink/core/logger"
+	"github.com/DCMMC/chainlink/core/services/fluxmonitorv2"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )

@@ -5,7 +5,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
-	"github.com/smartcontractkit/chainlink/core/cmd"
+	"github.com/DCMMC/chainlink/core/cmd"
 )
 
 func TestJAID(t *testing.T) {

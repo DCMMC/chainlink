@@ -8,10 +8,10 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/smartcontractkit/chainlink/core/services/job"
-	"github.com/smartcontractkit/chainlink/core/services/webhook"
-	webhookmocks "github.com/smartcontractkit/chainlink/core/services/webhook/mocks"
-	"github.com/smartcontractkit/chainlink/core/store/models"
+	"github.com/DCMMC/chainlink/core/services/job"
+	"github.com/DCMMC/chainlink/core/services/webhook"
+	webhookmocks "github.com/DCMMC/chainlink/core/services/webhook/mocks"
+	"github.com/DCMMC/chainlink/core/store/models"
 )
 
 func TestValidatedWebJobSpec(t *testing.T) {

@@ -1,8 +1,8 @@
 package vrf
 
 import (
-	"github.com/smartcontractkit/chainlink/core/services/keystore/keys/vrfkey"
-	"github.com/smartcontractkit/chainlink/core/services/vrf/proof"
+	"github.com/DCMMC/chainlink/core/services/keystore/keys/vrfkey"
+	"github.com/DCMMC/chainlink/core/services/vrf/proof"
 )
 
 func GenerateProofResponseFromProof(p vrfkey.Proof, s proof.PreSeedData) (

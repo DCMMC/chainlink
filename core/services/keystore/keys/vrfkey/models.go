@@ -7,11 +7,11 @@ import (
 	"os"
 	"time"
 
-	"github.com/smartcontractkit/chainlink/core/services/signatures/secp256k1"
+	"github.com/DCMMC/chainlink/core/services/signatures/secp256k1"
 
 	"github.com/ethereum/go-ethereum/accounts/keystore"
 	"github.com/pkg/errors"
-	"github.com/smartcontractkit/chainlink/core/utils"
+	"github.com/DCMMC/chainlink/core/utils"
 	"gorm.io/gorm"
 )
 

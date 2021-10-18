@@ -7,7 +7,7 @@ import (
 	"regexp"
 	"testing"
 
-	"github.com/smartcontractkit/chainlink/core/services/signatures/secp256k1"
+	"github.com/DCMMC/chainlink/core/services/signatures/secp256k1"
 
 	"github.com/stretchr/testify/assert"
 )

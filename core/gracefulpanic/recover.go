@@ -3,7 +3,7 @@ package gracefulpanic
 import (
 	"runtime/debug"
 
-	"github.com/smartcontractkit/chainlink/core/logger"
+	"github.com/DCMMC/chainlink/core/logger"
 )
 
 func WrapRecover(fn func()) {

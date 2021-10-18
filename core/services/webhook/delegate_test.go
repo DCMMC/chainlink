@@ -9,11 +9,11 @@ import (
 
 	"github.com/pkg/errors"
 
-	"github.com/smartcontractkit/chainlink/core/services/job"
-	"github.com/smartcontractkit/chainlink/core/services/pipeline"
-	pipelinemocks "github.com/smartcontractkit/chainlink/core/services/pipeline/mocks"
-	"github.com/smartcontractkit/chainlink/core/services/webhook"
-	webhookmocks "github.com/smartcontractkit/chainlink/core/services/webhook/mocks"
+	"github.com/DCMMC/chainlink/core/services/job"
+	"github.com/DCMMC/chainlink/core/services/pipeline"
+	pipelinemocks "github.com/DCMMC/chainlink/core/services/pipeline/mocks"
+	"github.com/DCMMC/chainlink/core/services/webhook"
+	webhookmocks "github.com/DCMMC/chainlink/core/services/webhook/mocks"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 )

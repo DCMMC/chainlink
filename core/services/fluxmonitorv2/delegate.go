@@ -2,12 +2,12 @@ package fluxmonitorv2
 
 import (
 	"github.com/pkg/errors"
-	"github.com/smartcontractkit/chainlink/core/services/bulletprooftxmanager"
-	"github.com/smartcontractkit/chainlink/core/services/eth"
-	"github.com/smartcontractkit/chainlink/core/services/job"
-	"github.com/smartcontractkit/chainlink/core/services/keystore"
-	"github.com/smartcontractkit/chainlink/core/services/log"
-	"github.com/smartcontractkit/chainlink/core/services/pipeline"
+	"github.com/DCMMC/chainlink/core/services/bulletprooftxmanager"
+	"github.com/DCMMC/chainlink/core/services/eth"
+	"github.com/DCMMC/chainlink/core/services/job"
+	"github.com/DCMMC/chainlink/core/services/keystore"
+	"github.com/DCMMC/chainlink/core/services/log"
+	"github.com/DCMMC/chainlink/core/services/pipeline"
 	"gorm.io/gorm"
 )
 

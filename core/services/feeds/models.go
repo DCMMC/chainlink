@@ -5,7 +5,7 @@ import (
 
 	"github.com/lib/pq"
 	uuid "github.com/satori/go.uuid"
-	"github.com/smartcontractkit/chainlink/core/utils/crypto"
+	"github.com/DCMMC/chainlink/core/utils/crypto"
 	"gopkg.in/guregu/null.v4"
 )
 

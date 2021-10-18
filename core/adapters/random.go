@@ -3,15 +3,15 @@ package adapters
 import (
 	"fmt"
 
-	"github.com/smartcontractkit/chainlink/core/services/vrf/proof"
+	"github.com/DCMMC/chainlink/core/services/vrf/proof"
 
-	"github.com/smartcontractkit/chainlink/core/internal/gethwrappers/generated/solidity_vrf_coordinator_interface"
-	"github.com/smartcontractkit/chainlink/core/services/keystore"
-	"github.com/smartcontractkit/chainlink/core/services/keystore/keys/ethkey"
-	"github.com/smartcontractkit/chainlink/core/services/signatures/secp256k1"
-	"github.com/smartcontractkit/chainlink/core/store"
-	"github.com/smartcontractkit/chainlink/core/store/models"
-	"github.com/smartcontractkit/chainlink/core/utils"
+	"github.com/DCMMC/chainlink/core/internal/gethwrappers/generated/solidity_vrf_coordinator_interface"
+	"github.com/DCMMC/chainlink/core/services/keystore"
+	"github.com/DCMMC/chainlink/core/services/keystore/keys/ethkey"
+	"github.com/DCMMC/chainlink/core/services/signatures/secp256k1"
+	"github.com/DCMMC/chainlink/core/store"
+	"github.com/DCMMC/chainlink/core/store/models"
+	"github.com/DCMMC/chainlink/core/utils"
 
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/common"

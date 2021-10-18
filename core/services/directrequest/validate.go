@@ -4,10 +4,10 @@ import (
 	"github.com/pelletier/go-toml"
 	"github.com/pkg/errors"
 
-	"github.com/smartcontractkit/chainlink/core/assets"
-	"github.com/smartcontractkit/chainlink/core/services/job"
-	"github.com/smartcontractkit/chainlink/core/services/keystore/keys/ethkey"
-	"github.com/smartcontractkit/chainlink/core/store/models"
+	"github.com/DCMMC/chainlink/core/assets"
+	"github.com/DCMMC/chainlink/core/services/job"
+	"github.com/DCMMC/chainlink/core/services/keystore/keys/ethkey"
+	"github.com/DCMMC/chainlink/core/store/models"
 )
 
 type DirectRequestToml struct {

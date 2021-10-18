@@ -3,12 +3,12 @@ package store_test
 import (
 	"testing"
 
-	"github.com/smartcontractkit/chainlink/core/static"
-	"github.com/smartcontractkit/chainlink/core/store"
-	"github.com/smartcontractkit/chainlink/core/store/migrations"
+	"github.com/DCMMC/chainlink/core/static"
+	"github.com/DCMMC/chainlink/core/store"
+	"github.com/DCMMC/chainlink/core/store/migrations"
 
-	"github.com/smartcontractkit/chainlink/core/internal/cltest"
-	"github.com/smartcontractkit/chainlink/core/internal/cltest/heavyweight"
+	"github.com/DCMMC/chainlink/core/internal/cltest"
+	"github.com/DCMMC/chainlink/core/internal/cltest/heavyweight"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"

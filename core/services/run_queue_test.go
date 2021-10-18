@@ -3,9 +3,9 @@ package services_test
 import (
 	"testing"
 
-	"github.com/smartcontractkit/chainlink/core/internal/cltest"
-	"github.com/smartcontractkit/chainlink/core/internal/mocks"
-	"github.com/smartcontractkit/chainlink/core/services"
+	"github.com/DCMMC/chainlink/core/internal/cltest"
+	"github.com/DCMMC/chainlink/core/internal/mocks"
+	"github.com/DCMMC/chainlink/core/services"
 
 	"github.com/onsi/gomega"
 	uuid "github.com/satori/go.uuid"

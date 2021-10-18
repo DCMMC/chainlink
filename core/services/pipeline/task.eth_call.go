@@ -9,7 +9,7 @@ import (
 	"github.com/pkg/errors"
 	"go.uber.org/multierr"
 
-	"github.com/smartcontractkit/chainlink/core/services/eth"
+	"github.com/DCMMC/chainlink/core/services/eth"
 )
 
 //

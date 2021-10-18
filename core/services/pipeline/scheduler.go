@@ -6,7 +6,7 @@ import (
 	"time"
 
 	"github.com/pkg/errors"
-	"github.com/smartcontractkit/chainlink/core/logger"
+	"github.com/DCMMC/chainlink/core/logger"
 	"gopkg.in/guregu/null.v4"
 )
 

@@ -4,10 +4,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/smartcontractkit/chainlink/core/services/pipeline"
+	"github.com/DCMMC/chainlink/core/services/pipeline"
 
 	"github.com/bmizerany/assert"
-	"github.com/smartcontractkit/chainlink/core/internal/cltest"
+	"github.com/DCMMC/chainlink/core/internal/cltest"
 	"github.com/stretchr/testify/require"
 )
 

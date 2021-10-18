@@ -6,8 +6,8 @@ import (
 	"testing"
 
 	"github.com/pkg/errors"
-	"github.com/smartcontractkit/chainlink/core/services/gas"
-	"github.com/smartcontractkit/chainlink/core/services/gas/mocks"
+	"github.com/DCMMC/chainlink/core/services/gas"
+	"github.com/DCMMC/chainlink/core/services/gas/mocks"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"

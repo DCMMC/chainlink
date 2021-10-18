@@ -4,8 +4,8 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/smartcontractkit/chainlink/core/store/models"
-	"github.com/smartcontractkit/chainlink/core/web"
+	"github.com/DCMMC/chainlink/core/store/models"
+	"github.com/DCMMC/chainlink/core/web"
 
 	"github.com/stretchr/testify/assert"
 )

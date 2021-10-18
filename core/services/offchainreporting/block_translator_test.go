@@ -5,9 +5,9 @@ import (
 	"math/big"
 	"testing"
 
-	"github.com/smartcontractkit/chainlink/core/chains"
-	"github.com/smartcontractkit/chainlink/core/internal/mocks"
-	"github.com/smartcontractkit/chainlink/core/services/offchainreporting"
+	"github.com/DCMMC/chainlink/core/chains"
+	"github.com/DCMMC/chainlink/core/internal/mocks"
+	"github.com/DCMMC/chainlink/core/services/offchainreporting"
 	"github.com/stretchr/testify/assert"
 )
 

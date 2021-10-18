@@ -4,9 +4,9 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/smartcontractkit/chainlink/core/internal/cltest"
-	"github.com/smartcontractkit/chainlink/core/services/keystore/keys/p2pkey"
-	"github.com/smartcontractkit/chainlink/core/services/offchainreporting"
+	"github.com/DCMMC/chainlink/core/internal/cltest"
+	"github.com/DCMMC/chainlink/core/services/keystore/keys/p2pkey"
+	"github.com/DCMMC/chainlink/core/services/offchainreporting"
 	"github.com/stretchr/testify/require"
 )
 

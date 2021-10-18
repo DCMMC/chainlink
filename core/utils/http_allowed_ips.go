@@ -6,7 +6,7 @@ import (
 	"net"
 	"time"
 
-	"github.com/smartcontractkit/chainlink/core/logger"
+	"github.com/DCMMC/chainlink/core/logger"
 )
 
 var privateIPBlocks []*net.IPNet

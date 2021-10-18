@@ -4,10 +4,10 @@ import (
 	"math/big"
 	"testing"
 
-	proof2 "github.com/smartcontractkit/chainlink/core/services/vrf/proof"
+	proof2 "github.com/DCMMC/chainlink/core/services/vrf/proof"
 
-	"github.com/smartcontractkit/chainlink/core/internal/cltest"
-	"github.com/smartcontractkit/chainlink/core/services/vrf"
+	"github.com/DCMMC/chainlink/core/internal/cltest"
+	"github.com/DCMMC/chainlink/core/services/vrf"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )

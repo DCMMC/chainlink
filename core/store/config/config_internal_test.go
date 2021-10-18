@@ -8,8 +8,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/smartcontractkit/chainlink/core/assets"
-	"github.com/smartcontractkit/chainlink/core/chains"
+	"github.com/DCMMC/chainlink/core/assets"
+	"github.com/DCMMC/chainlink/core/chains"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/spf13/viper"

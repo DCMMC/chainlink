@@ -1,6 +1,6 @@
 package service
 
-import "github.com/smartcontractkit/chainlink/core/services/health"
+import "github.com/DCMMC/chainlink/core/services/health"
 
 type (
 	// Service represents a long running service inside the

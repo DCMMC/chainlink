@@ -6,8 +6,8 @@ import (
 	"regexp"
 	"time"
 
-	"github.com/smartcontractkit/chainlink/core/auth"
-	"github.com/smartcontractkit/chainlink/core/utils"
+	"github.com/DCMMC/chainlink/core/auth"
+	"github.com/DCMMC/chainlink/core/utils"
 
 	"github.com/pkg/errors"
 )

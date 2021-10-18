@@ -4,11 +4,11 @@ import (
 	"testing"
 	"time"
 
-	"github.com/smartcontractkit/chainlink/core/internal/cltest"
-	"github.com/smartcontractkit/chainlink/core/internal/testutils/pgtest"
-	"github.com/smartcontractkit/chainlink/core/services"
-	"github.com/smartcontractkit/chainlink/core/services/postgres"
-	"github.com/smartcontractkit/chainlink/core/store/models"
+	"github.com/DCMMC/chainlink/core/internal/cltest"
+	"github.com/DCMMC/chainlink/core/internal/testutils/pgtest"
+	"github.com/DCMMC/chainlink/core/services"
+	"github.com/DCMMC/chainlink/core/services/postgres"
+	"github.com/DCMMC/chainlink/core/store/models"
 	"gorm.io/gorm"
 
 	"github.com/onsi/gomega"

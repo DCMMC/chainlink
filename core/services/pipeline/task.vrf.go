@@ -9,12 +9,12 @@ import (
 
 	"github.com/ethereum/go-ethereum/common/hexutil"
 
-	"github.com/smartcontractkit/chainlink/core/services/keystore/keys/vrfkey"
+	"github.com/DCMMC/chainlink/core/services/keystore/keys/vrfkey"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/pkg/errors"
-	"github.com/smartcontractkit/chainlink/core/services/signatures/secp256k1"
-	"github.com/smartcontractkit/chainlink/core/services/vrf/proof"
+	"github.com/DCMMC/chainlink/core/services/signatures/secp256k1"
+	"github.com/DCMMC/chainlink/core/services/vrf/proof"
 	"go.uber.org/multierr"
 )
 

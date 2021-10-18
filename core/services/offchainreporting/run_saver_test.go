@@ -3,10 +3,10 @@ package offchainreporting
 import (
 	"testing"
 
-	"github.com/smartcontractkit/chainlink/core/logger"
-	"github.com/smartcontractkit/chainlink/core/services/pipeline"
-	"github.com/smartcontractkit/chainlink/core/services/pipeline/mocks"
-	"github.com/smartcontractkit/chainlink/core/store/config"
+	"github.com/DCMMC/chainlink/core/logger"
+	"github.com/DCMMC/chainlink/core/services/pipeline"
+	"github.com/DCMMC/chainlink/core/services/pipeline/mocks"
+	"github.com/DCMMC/chainlink/core/store/config"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 	gormpostgres "gorm.io/driver/postgres"

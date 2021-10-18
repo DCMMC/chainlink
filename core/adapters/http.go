@@ -11,11 +11,11 @@ import (
 	"strings"
 
 	"github.com/pkg/errors"
-	"github.com/smartcontractkit/chainlink/core/services/keystore"
-	"github.com/smartcontractkit/chainlink/core/store"
-	"github.com/smartcontractkit/chainlink/core/store/models"
-	"github.com/smartcontractkit/chainlink/core/store/orm"
-	"github.com/smartcontractkit/chainlink/core/utils"
+	"github.com/DCMMC/chainlink/core/services/keystore"
+	"github.com/DCMMC/chainlink/core/store"
+	"github.com/DCMMC/chainlink/core/store/models"
+	"github.com/DCMMC/chainlink/core/store/orm"
+	"github.com/DCMMC/chainlink/core/utils"
 )
 
 // HTTPGet requires a URL which is used for a GET request when the adapter is called.

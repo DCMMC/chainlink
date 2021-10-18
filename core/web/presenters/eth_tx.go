@@ -5,7 +5,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
-	"github.com/smartcontractkit/chainlink/core/services/bulletprooftxmanager"
+	"github.com/DCMMC/chainlink/core/services/bulletprooftxmanager"
 )
 
 // EthTxResource represents a Ethereum Transaction JSONAPI resource.

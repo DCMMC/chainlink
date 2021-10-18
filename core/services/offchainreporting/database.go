@@ -11,8 +11,8 @@ import (
 	"github.com/pkg/errors"
 	"go.uber.org/multierr"
 
-	"github.com/smartcontractkit/chainlink/core/logger"
-	"github.com/smartcontractkit/chainlink/core/utils"
+	"github.com/DCMMC/chainlink/core/logger"
+	"github.com/DCMMC/chainlink/core/utils"
 	"github.com/DCMMC/libocr/gethwrappers/offchainaggregator"
 	ocrtypes "github.com/DCMMC/libocr/offchainreporting/types"
 )

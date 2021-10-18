@@ -9,11 +9,11 @@ import (
 
 	"github.com/ethereum/go-ethereum/eth/ethconfig"
 
-	"github.com/smartcontractkit/chainlink/core/assets"
-	"github.com/smartcontractkit/chainlink/core/internal/cltest"
-	"github.com/smartcontractkit/chainlink/core/internal/gethwrappers/generated/solidity_vrf_verifier_wrapper"
-	"github.com/smartcontractkit/chainlink/core/services/keystore/keys/vrfkey"
-	"github.com/smartcontractkit/chainlink/core/services/signatures/secp256k1"
+	"github.com/DCMMC/chainlink/core/assets"
+	"github.com/DCMMC/chainlink/core/internal/cltest"
+	"github.com/DCMMC/chainlink/core/internal/gethwrappers/generated/solidity_vrf_verifier_wrapper"
+	"github.com/DCMMC/chainlink/core/services/keystore/keys/vrfkey"
+	"github.com/DCMMC/chainlink/core/services/signatures/secp256k1"
 
 	"github.com/ethereum/go-ethereum"
 	"github.com/ethereum/go-ethereum/accounts/abi"

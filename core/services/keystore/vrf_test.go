@@ -5,13 +5,13 @@ import (
 	"math/big"
 	"testing"
 
-	proof2 "github.com/smartcontractkit/chainlink/core/services/vrf/proof"
+	proof2 "github.com/DCMMC/chainlink/core/services/vrf/proof"
 
-	"github.com/smartcontractkit/chainlink/core/assets"
-	"github.com/smartcontractkit/chainlink/core/services/keystore/keys/vrfkey"
+	"github.com/DCMMC/chainlink/core/assets"
+	"github.com/DCMMC/chainlink/core/services/keystore/keys/vrfkey"
 
 	"github.com/ethereum/go-ethereum/eth/ethconfig"
-	"github.com/smartcontractkit/chainlink/core/services/keystore"
+	"github.com/DCMMC/chainlink/core/services/keystore"
 
 	"github.com/ethereum/go-ethereum/accounts/abi/bind/backends"
 	"github.com/ethereum/go-ethereum/common"
@@ -21,8 +21,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/smartcontractkit/chainlink/core/internal/cltest"
-	"github.com/smartcontractkit/chainlink/core/internal/gethwrappers/generated/solidity_vrf_verifier_wrapper"
+	"github.com/DCMMC/chainlink/core/internal/cltest"
+	"github.com/DCMMC/chainlink/core/internal/gethwrappers/generated/solidity_vrf_verifier_wrapper"
 )
 
 // NB: For changes to the VRF solidity code to be reflected here, "go generate"

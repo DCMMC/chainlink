@@ -6,10 +6,10 @@ import (
 	"math/big"
 	"time"
 
-	"github.com/smartcontractkit/chainlink/core/logger"
+	"github.com/DCMMC/chainlink/core/logger"
 
 	"github.com/shopspring/decimal"
-	"github.com/smartcontractkit/chainlink/core/services/pipeline"
+	"github.com/DCMMC/chainlink/core/services/pipeline"
 )
 
 // Corresponds with models.d.ts PipelineRun

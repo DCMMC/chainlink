@@ -4,8 +4,8 @@ import (
 	"math/big"
 	"testing"
 
-	"github.com/smartcontractkit/chainlink/core/assets"
-	"github.com/smartcontractkit/chainlink/core/services/fluxmonitorv2"
+	"github.com/DCMMC/chainlink/core/assets"
+	"github.com/DCMMC/chainlink/core/services/fluxmonitorv2"
 	"github.com/stretchr/testify/assert"
 )
 

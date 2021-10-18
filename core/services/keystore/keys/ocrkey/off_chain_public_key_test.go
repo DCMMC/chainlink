@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/smartcontractkit/chainlink/core/services/keystore/keys/ocrkey"
+	"github.com/DCMMC/chainlink/core/services/keystore/keys/ocrkey"
 	"github.com/stretchr/testify/assert"
 )
 

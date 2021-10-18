@@ -8,10 +8,10 @@ import (
 
 	"gorm.io/gorm"
 
-	"github.com/smartcontractkit/chainlink/core/internal/cltest"
-	"github.com/smartcontractkit/chainlink/core/internal/mocks"
-	"github.com/smartcontractkit/chainlink/core/services/fluxmonitorv2"
-	fmmocks "github.com/smartcontractkit/chainlink/core/services/fluxmonitorv2/mocks"
+	"github.com/DCMMC/chainlink/core/internal/cltest"
+	"github.com/DCMMC/chainlink/core/internal/mocks"
+	"github.com/DCMMC/chainlink/core/services/fluxmonitorv2"
+	fmmocks "github.com/DCMMC/chainlink/core/services/fluxmonitorv2/mocks"
 	"github.com/stretchr/testify/assert"
 )
 

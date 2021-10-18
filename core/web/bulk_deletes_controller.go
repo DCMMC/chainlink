@@ -3,9 +3,9 @@ package web
 import (
 	"net/http"
 
-	"github.com/smartcontractkit/chainlink/core/services/chainlink"
-	"github.com/smartcontractkit/chainlink/core/services/postgres"
-	"github.com/smartcontractkit/chainlink/core/store/models"
+	"github.com/DCMMC/chainlink/core/services/chainlink"
+	"github.com/DCMMC/chainlink/core/services/postgres"
+	"github.com/DCMMC/chainlink/core/store/models"
 
 	"github.com/gin-gonic/gin"
 )

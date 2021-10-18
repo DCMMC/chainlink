@@ -18,11 +18,11 @@ import (
 	"sync"
 	"time"
 
-	"github.com/smartcontractkit/chainlink/core/chains"
-	"github.com/smartcontractkit/chainlink/core/services/keystore/keys/ethkey"
-	"github.com/smartcontractkit/chainlink/core/services/keystore/keys/p2pkey"
-	"github.com/smartcontractkit/chainlink/core/static"
-	"github.com/smartcontractkit/chainlink/core/store/dialects"
+	"github.com/DCMMC/chainlink/core/chains"
+	"github.com/DCMMC/chainlink/core/services/keystore/keys/ethkey"
+	"github.com/DCMMC/chainlink/core/services/keystore/keys/p2pkey"
+	"github.com/DCMMC/chainlink/core/static"
+	"github.com/DCMMC/chainlink/core/store/dialects"
 
 	"gorm.io/gorm"
 
@@ -32,10 +32,10 @@ import (
 	ocr "github.com/DCMMC/libocr/offchainreporting"
 	ocrtypes "github.com/DCMMC/libocr/offchainreporting/types"
 
-	"github.com/smartcontractkit/chainlink/core/assets"
-	"github.com/smartcontractkit/chainlink/core/logger"
-	"github.com/smartcontractkit/chainlink/core/store/models"
-	"github.com/smartcontractkit/chainlink/core/utils"
+	"github.com/DCMMC/chainlink/core/assets"
+	"github.com/DCMMC/chainlink/core/logger"
+	"github.com/DCMMC/chainlink/core/store/models"
+	"github.com/DCMMC/chainlink/core/utils"
 
 	"github.com/ethereum/go-ethereum/common"
 	ethCore "github.com/ethereum/go-ethereum/core"

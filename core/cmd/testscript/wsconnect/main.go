@@ -6,12 +6,12 @@ import (
 	"net/url"
 	"time"
 
-	"github.com/smartcontractkit/chainlink/core/internal/mocks"
-	"github.com/smartcontractkit/chainlink/core/store/models"
+	"github.com/DCMMC/chainlink/core/internal/mocks"
+	"github.com/DCMMC/chainlink/core/store/models"
 
 	"github.com/ethereum/go-ethereum"
-	"github.com/smartcontractkit/chainlink/core/services"
-	"github.com/smartcontractkit/chainlink/core/services/eth"
+	"github.com/DCMMC/chainlink/core/services"
+	"github.com/DCMMC/chainlink/core/services/eth"
 )
 
 func panicErr(err error) {

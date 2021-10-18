@@ -3,8 +3,8 @@ package offchainreporting_test
 import (
 	"testing"
 
-	"github.com/smartcontractkit/chainlink/core/internal/cltest"
-	"github.com/smartcontractkit/chainlink/core/services/offchainreporting"
+	"github.com/DCMMC/chainlink/core/internal/cltest"
+	"github.com/DCMMC/chainlink/core/services/offchainreporting"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )

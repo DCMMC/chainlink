@@ -3,8 +3,8 @@ package presenters
 import (
 	"time"
 
-	"github.com/smartcontractkit/chainlink/core/assets"
-	"github.com/smartcontractkit/chainlink/core/store/models"
+	"github.com/DCMMC/chainlink/core/assets"
+	"github.com/DCMMC/chainlink/core/store/models"
 )
 
 // BridgeResource represents a Bridge JSONAPI resource.

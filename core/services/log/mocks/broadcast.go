@@ -4,7 +4,7 @@ package mocks
 
 import (
 	common "github.com/ethereum/go-ethereum/common"
-	log "github.com/smartcontractkit/chainlink/core/services/log"
+	log "github.com/DCMMC/chainlink/core/services/log"
 	mock "github.com/stretchr/testify/mock"
 
 	types "github.com/ethereum/go-ethereum/core/types"

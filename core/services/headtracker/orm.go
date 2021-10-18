@@ -4,8 +4,8 @@ import (
 	"context"
 
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/smartcontractkit/chainlink/core/logger"
-	"github.com/smartcontractkit/chainlink/core/store/models"
+	"github.com/DCMMC/chainlink/core/logger"
+	"github.com/DCMMC/chainlink/core/store/models"
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
 )

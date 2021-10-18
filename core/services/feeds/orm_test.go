@@ -6,9 +6,9 @@ import (
 
 	"github.com/lib/pq"
 	uuid "github.com/satori/go.uuid"
-	"github.com/smartcontractkit/chainlink/core/internal/testutils/pgtest"
-	"github.com/smartcontractkit/chainlink/core/services/feeds"
-	"github.com/smartcontractkit/chainlink/core/utils/crypto"
+	"github.com/DCMMC/chainlink/core/internal/testutils/pgtest"
+	"github.com/DCMMC/chainlink/core/services/feeds"
+	"github.com/DCMMC/chainlink/core/utils/crypto"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"gopkg.in/guregu/null.v4"

@@ -3,8 +3,8 @@ package keeper
 import (
 	"context"
 
-	"github.com/smartcontractkit/chainlink/core/services/bulletprooftxmanager"
-	"github.com/smartcontractkit/chainlink/core/services/keystore/keys/ethkey"
+	"github.com/DCMMC/chainlink/core/services/bulletprooftxmanager"
+	"github.com/DCMMC/chainlink/core/services/keystore/keys/ethkey"
 
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"

@@ -5,8 +5,8 @@ import (
 	"testing"
 
 	uuid "github.com/satori/go.uuid"
-	"github.com/smartcontractkit/chainlink/core/services/feeds"
-	pb "github.com/smartcontractkit/chainlink/core/services/feeds/proto"
+	"github.com/DCMMC/chainlink/core/services/feeds"
+	pb "github.com/DCMMC/chainlink/core/services/feeds/proto"
 	"github.com/stretchr/testify/require"
 )
 

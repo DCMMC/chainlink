@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/smartcontractkit/chainlink/core/auth"
-	"github.com/smartcontractkit/chainlink/core/store/models"
+	"github.com/DCMMC/chainlink/core/auth"
+	"github.com/DCMMC/chainlink/core/store/models"
 )
 
 // ExternalInitiatorAuthentication includes initiator and authentication details.

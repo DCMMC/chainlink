@@ -12,10 +12,10 @@ import (
 	"go.uber.org/multierr"
 	"gorm.io/gorm"
 
-	"github.com/smartcontractkit/chainlink/core/logger"
-	"github.com/smartcontractkit/chainlink/core/service"
-	"github.com/smartcontractkit/chainlink/core/static"
-	"github.com/smartcontractkit/chainlink/core/utils"
+	"github.com/DCMMC/chainlink/core/logger"
+	"github.com/DCMMC/chainlink/core/service"
+	"github.com/DCMMC/chainlink/core/static"
+	"github.com/DCMMC/chainlink/core/utils"
 )
 
 //go:generate mockery --name EventBroadcaster --output ./mocks/ --case=underscore

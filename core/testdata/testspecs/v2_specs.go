@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/smartcontractkit/chainlink/core/services/webhook"
+	"github.com/DCMMC/chainlink/core/services/webhook"
 )
 
 var (

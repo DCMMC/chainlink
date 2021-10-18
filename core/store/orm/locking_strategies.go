@@ -8,12 +8,12 @@ import (
 	"sync"
 	"time"
 
-	"github.com/smartcontractkit/chainlink/core/static"
-	"github.com/smartcontractkit/chainlink/core/store/dialects"
+	"github.com/DCMMC/chainlink/core/static"
+	"github.com/DCMMC/chainlink/core/store/dialects"
 
 	"github.com/pkg/errors"
-	"github.com/smartcontractkit/chainlink/core/logger"
-	"github.com/smartcontractkit/chainlink/core/store/models"
+	"github.com/DCMMC/chainlink/core/logger"
+	"github.com/DCMMC/chainlink/core/store/models"
 	"go.uber.org/multierr"
 )
 

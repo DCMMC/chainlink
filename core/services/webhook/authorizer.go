@@ -4,7 +4,7 @@ import (
 	"context"
 
 	uuid "github.com/satori/go.uuid"
-	"github.com/smartcontractkit/chainlink/core/store/models"
+	"github.com/DCMMC/chainlink/core/store/models"
 	"gorm.io/gorm"
 )
 

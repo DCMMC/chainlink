@@ -6,8 +6,8 @@ import (
 	"fmt"
 	"net/http"
 
-	"github.com/smartcontractkit/chainlink/core/logger"
-	"github.com/smartcontractkit/chainlink/core/services/job"
+	"github.com/DCMMC/chainlink/core/logger"
+	"github.com/DCMMC/chainlink/core/services/job"
 	"go.uber.org/multierr"
 
 	uuid "github.com/satori/go.uuid"
@@ -15,8 +15,8 @@ import (
 	"github.com/pkg/errors"
 	"gorm.io/gorm"
 
-	"github.com/smartcontractkit/chainlink/core/static"
-	"github.com/smartcontractkit/chainlink/core/store/models"
+	"github.com/DCMMC/chainlink/core/static"
+	"github.com/DCMMC/chainlink/core/store/models"
 )
 
 //go:generate mockery --name ExternalInitiatorManager --output ./mocks/ --case=underscore

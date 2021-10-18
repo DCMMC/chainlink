@@ -7,14 +7,14 @@ import (
 	"testing"
 	"time"
 
-	"github.com/smartcontractkit/chainlink/core/static"
+	"github.com/DCMMC/chainlink/core/static"
 
 	uuid "github.com/satori/go.uuid"
-	"github.com/smartcontractkit/chainlink/core/auth"
-	"github.com/smartcontractkit/chainlink/core/internal/cltest"
-	"github.com/smartcontractkit/chainlink/core/store/models"
-	"github.com/smartcontractkit/chainlink/core/store/presenters"
-	"github.com/smartcontractkit/chainlink/core/web"
+	"github.com/DCMMC/chainlink/core/auth"
+	"github.com/DCMMC/chainlink/core/internal/cltest"
+	"github.com/DCMMC/chainlink/core/store/models"
+	"github.com/DCMMC/chainlink/core/store/presenters"
+	"github.com/DCMMC/chainlink/core/web"
 
 	"github.com/manyminds/api2go/jsonapi"
 	"github.com/stretchr/testify/assert"

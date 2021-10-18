@@ -6,7 +6,7 @@ import (
 	"time"
 
 	uuid "github.com/satori/go.uuid"
-	"github.com/smartcontractkit/chainlink/core/services/postgres"
+	"github.com/DCMMC/chainlink/core/services/postgres"
 	"gorm.io/gorm"
 )
 

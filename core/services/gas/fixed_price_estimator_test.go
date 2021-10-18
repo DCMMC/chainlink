@@ -4,8 +4,8 @@ import (
 	"math/big"
 	"testing"
 
-	"github.com/smartcontractkit/chainlink/core/services/gas"
-	"github.com/smartcontractkit/chainlink/core/services/gas/mocks"
+	"github.com/DCMMC/chainlink/core/services/gas"
+	"github.com/DCMMC/chainlink/core/services/gas/mocks"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )

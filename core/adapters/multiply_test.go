@@ -4,8 +4,8 @@ import (
 	"encoding/json"
 	"testing"
 
-	"github.com/smartcontractkit/chainlink/core/adapters"
-	"github.com/smartcontractkit/chainlink/core/internal/cltest"
+	"github.com/DCMMC/chainlink/core/adapters"
+	"github.com/DCMMC/chainlink/core/internal/cltest"
 
 	"github.com/shopspring/decimal"
 	"github.com/stretchr/testify/assert"

@@ -11,8 +11,8 @@ import (
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 
-	ethmocks "github.com/smartcontractkit/chainlink/core/services/eth/mocks"
-	"github.com/smartcontractkit/chainlink/core/services/pipeline"
+	ethmocks "github.com/DCMMC/chainlink/core/services/eth/mocks"
+	"github.com/DCMMC/chainlink/core/services/pipeline"
 )
 
 func TestETHCallTask(t *testing.T) {

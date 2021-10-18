@@ -3,9 +3,9 @@ package types
 import (
 	"context"
 
-	"github.com/smartcontractkit/chainlink/core/logger"
-	"github.com/smartcontractkit/chainlink/core/service"
-	"github.com/smartcontractkit/chainlink/core/store/models"
+	"github.com/DCMMC/chainlink/core/logger"
+	"github.com/DCMMC/chainlink/core/service"
+	"github.com/DCMMC/chainlink/core/store/models"
 )
 
 type Tracker interface {

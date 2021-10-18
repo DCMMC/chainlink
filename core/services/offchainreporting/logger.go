@@ -1,7 +1,7 @@
 package offchainreporting
 
 import (
-	"github.com/smartcontractkit/chainlink/core/logger"
+	"github.com/DCMMC/chainlink/core/logger"
 	ocrtypes "github.com/DCMMC/libocr/offchainreporting/types"
 	"go.uber.org/zap"
 )

@@ -7,9 +7,9 @@ import (
 	"github.com/pkg/errors"
 	"go.uber.org/multierr"
 
-	"github.com/smartcontractkit/chainlink/core/services/keystore"
-	"github.com/smartcontractkit/chainlink/core/services/keystore/keys/p2pkey"
-	"github.com/smartcontractkit/chainlink/core/store/config"
+	"github.com/DCMMC/chainlink/core/services/keystore"
+	"github.com/DCMMC/chainlink/core/services/keystore/keys/p2pkey"
+	"github.com/DCMMC/chainlink/core/store/config"
 )
 
 // KeyStoreAuthenticator implements the Authenticate method for the store and

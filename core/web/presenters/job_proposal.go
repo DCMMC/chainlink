@@ -4,7 +4,7 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/smartcontractkit/chainlink/core/services/feeds"
+	"github.com/DCMMC/chainlink/core/services/feeds"
 )
 
 // JobProposalResource represents a job proposal JSONAPI resource.

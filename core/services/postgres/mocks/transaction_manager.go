@@ -5,7 +5,7 @@ package mocks
 import (
 	context "context"
 
-	postgres "github.com/smartcontractkit/chainlink/core/services/postgres"
+	postgres "github.com/DCMMC/chainlink/core/services/postgres"
 	mock "github.com/stretchr/testify/mock"
 )
 

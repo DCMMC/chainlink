@@ -6,7 +6,7 @@ import (
 	"github.com/multiformats/go-multiaddr"
 	"github.com/pelletier/go-toml"
 	"github.com/pkg/errors"
-	"github.com/smartcontractkit/chainlink/core/services/job"
+	"github.com/DCMMC/chainlink/core/services/job"
 	"github.com/DCMMC/libocr/offchainreporting"
 	"github.com/DCMMC/libocr/offchainreporting/types"
 	"go.uber.org/multierr"

@@ -1,6 +1,6 @@
 package feeds
 
-import "github.com/smartcontractkit/chainlink/core/services/feeds/proto"
+import "github.com/DCMMC/chainlink/core/services/feeds/proto"
 
 // SetFMSClient allows us to manually set the FMS client. Only used for testing.
 //

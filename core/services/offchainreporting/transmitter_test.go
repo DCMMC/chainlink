@@ -4,10 +4,10 @@ import (
 	"context"
 	"testing"
 
-	"github.com/smartcontractkit/chainlink/core/internal/cltest"
-	"github.com/smartcontractkit/chainlink/core/services/bulletprooftxmanager"
-	bptxmmocks "github.com/smartcontractkit/chainlink/core/services/bulletprooftxmanager/mocks"
-	"github.com/smartcontractkit/chainlink/core/services/offchainreporting"
+	"github.com/DCMMC/chainlink/core/internal/cltest"
+	"github.com/DCMMC/chainlink/core/services/bulletprooftxmanager"
+	bptxmmocks "github.com/DCMMC/chainlink/core/services/bulletprooftxmanager/mocks"
+	"github.com/DCMMC/chainlink/core/services/offchainreporting"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 )

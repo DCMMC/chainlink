@@ -1,7 +1,7 @@
 package postgres
 
 import (
-	"github.com/smartcontractkit/chainlink/core/store/models"
+	"github.com/DCMMC/chainlink/core/store/models"
 	"gorm.io/gorm"
 )
 

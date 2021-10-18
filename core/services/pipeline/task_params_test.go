@@ -10,7 +10,7 @@ import (
 	"github.com/shopspring/decimal"
 	"github.com/stretchr/testify/require"
 
-	"github.com/smartcontractkit/chainlink/core/services/pipeline"
+	"github.com/DCMMC/chainlink/core/services/pipeline"
 )
 
 func TestStringParam_UnmarshalPipelineParam(t *testing.T) {

@@ -8,8 +8,8 @@ import (
 	"github.com/onsi/gomega"
 	"github.com/stretchr/testify/require"
 
-	"github.com/smartcontractkit/chainlink/core/internal/cltest/heavyweight"
-	"github.com/smartcontractkit/chainlink/core/services/postgres"
+	"github.com/DCMMC/chainlink/core/internal/cltest/heavyweight"
+	"github.com/DCMMC/chainlink/core/services/postgres"
 )
 
 func TestEventBroadcaster(t *testing.T) {

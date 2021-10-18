@@ -5,7 +5,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/pkg/errors"
-	"github.com/smartcontractkit/chainlink/core/services/bulletprooftxmanager"
+	"github.com/DCMMC/chainlink/core/services/bulletprooftxmanager"
 	"gorm.io/gorm"
 )
 

@@ -5,7 +5,7 @@ import (
 	"math/big"
 	"sync"
 
-	"github.com/smartcontractkit/chainlink/core/logger"
+	"github.com/DCMMC/chainlink/core/logger"
 )
 
 // To add a new chain to this file:

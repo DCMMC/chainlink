@@ -5,10 +5,10 @@ import (
 	"strings"
 	"testing"
 
-	proof2 "github.com/smartcontractkit/chainlink/core/services/vrf/proof"
+	proof2 "github.com/DCMMC/chainlink/core/services/vrf/proof"
 
-	"github.com/smartcontractkit/chainlink/core/internal/gethwrappers/generated/solidity_vrf_consumer_interface_v08"
-	"github.com/smartcontractkit/chainlink/core/internal/gethwrappers/generated/solidity_vrf_request_id_v08"
+	"github.com/DCMMC/chainlink/core/internal/gethwrappers/generated/solidity_vrf_consumer_interface_v08"
+	"github.com/DCMMC/chainlink/core/internal/gethwrappers/generated/solidity_vrf_request_id_v08"
 
 	"github.com/ethereum/go-ethereum/eth/ethconfig"
 
@@ -22,19 +22,19 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/smartcontractkit/chainlink/core/services/keystore/keys/ethkey"
-	"github.com/smartcontractkit/chainlink/core/services/keystore/keys/vrfkey"
-	"github.com/smartcontractkit/chainlink/core/services/signatures/secp256k1"
-	"github.com/smartcontractkit/chainlink/core/services/vrf"
-	"github.com/smartcontractkit/chainlink/core/store/config"
-	"github.com/smartcontractkit/chainlink/core/store/models"
-	"github.com/smartcontractkit/chainlink/core/utils"
+	"github.com/DCMMC/chainlink/core/services/keystore/keys/ethkey"
+	"github.com/DCMMC/chainlink/core/services/keystore/keys/vrfkey"
+	"github.com/DCMMC/chainlink/core/services/signatures/secp256k1"
+	"github.com/DCMMC/chainlink/core/services/vrf"
+	"github.com/DCMMC/chainlink/core/store/config"
+	"github.com/DCMMC/chainlink/core/store/models"
+	"github.com/DCMMC/chainlink/core/utils"
 
-	"github.com/smartcontractkit/chainlink/core/internal/cltest"
-	"github.com/smartcontractkit/chainlink/core/internal/gethwrappers/generated/link_token_interface"
-	"github.com/smartcontractkit/chainlink/core/internal/gethwrappers/generated/solidity_vrf_consumer_interface"
-	"github.com/smartcontractkit/chainlink/core/internal/gethwrappers/generated/solidity_vrf_coordinator_interface"
-	"github.com/smartcontractkit/chainlink/core/internal/gethwrappers/generated/solidity_vrf_request_id"
+	"github.com/DCMMC/chainlink/core/internal/cltest"
+	"github.com/DCMMC/chainlink/core/internal/gethwrappers/generated/link_token_interface"
+	"github.com/DCMMC/chainlink/core/internal/gethwrappers/generated/solidity_vrf_consumer_interface"
+	"github.com/DCMMC/chainlink/core/internal/gethwrappers/generated/solidity_vrf_coordinator_interface"
+	"github.com/DCMMC/chainlink/core/internal/gethwrappers/generated/solidity_vrf_request_id"
 )
 
 // coordinatorUniverse represents the universe in which a randomness request occurs and

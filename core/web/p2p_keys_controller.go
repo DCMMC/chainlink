@@ -7,10 +7,10 @@ import (
 	"strconv"
 
 	"github.com/gin-gonic/gin"
-	"github.com/smartcontractkit/chainlink/core/logger"
-	"github.com/smartcontractkit/chainlink/core/services/chainlink"
-	"github.com/smartcontractkit/chainlink/core/services/keystore/keys/p2pkey"
-	"github.com/smartcontractkit/chainlink/core/web/presenters"
+	"github.com/DCMMC/chainlink/core/logger"
+	"github.com/DCMMC/chainlink/core/services/chainlink"
+	"github.com/DCMMC/chainlink/core/services/keystore/keys/p2pkey"
+	"github.com/DCMMC/chainlink/core/web/presenters"
 )
 
 // P2PKeysController manages P2P keys

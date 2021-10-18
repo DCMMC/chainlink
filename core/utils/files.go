@@ -6,7 +6,7 @@ import (
 	"os"
 	"syscall"
 
-	"github.com/smartcontractkit/chainlink/core/logger"
+	"github.com/DCMMC/chainlink/core/logger"
 
 	"github.com/pkg/errors"
 )

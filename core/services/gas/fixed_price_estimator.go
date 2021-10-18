@@ -4,7 +4,7 @@ import (
 	"context"
 	"math/big"
 
-	"github.com/smartcontractkit/chainlink/core/store/models"
+	"github.com/DCMMC/chainlink/core/store/models"
 )
 
 var _ Estimator = &fixedPriceEstimator{}

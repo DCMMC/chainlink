@@ -3,8 +3,8 @@
 package mocks
 
 import (
-	synchronization "github.com/smartcontractkit/chainlink/core/services/synchronization"
-	models "github.com/smartcontractkit/chainlink/core/store/models"
+	synchronization "github.com/DCMMC/chainlink/core/services/synchronization"
+	models "github.com/DCMMC/chainlink/core/store/models"
 	mock "github.com/stretchr/testify/mock"
 
 	url "net/url"

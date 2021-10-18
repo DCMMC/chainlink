@@ -10,8 +10,8 @@ import (
 	"github.com/pkg/errors"
 	"github.com/stretchr/testify/require"
 
-	"github.com/smartcontractkit/chainlink/core/services/pipeline"
-	"github.com/smartcontractkit/chainlink/core/utils"
+	"github.com/DCMMC/chainlink/core/services/pipeline"
+	"github.com/DCMMC/chainlink/core/utils"
 )
 
 func TestETHABIDecodeLogTask(t *testing.T) {

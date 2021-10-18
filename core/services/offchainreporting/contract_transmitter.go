@@ -9,7 +9,7 @@ import (
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	gethCommon "github.com/ethereum/go-ethereum/common"
 	"github.com/pkg/errors"
-	"github.com/smartcontractkit/chainlink/core/services/log"
+	"github.com/DCMMC/chainlink/core/services/log"
 	"github.com/DCMMC/libocr/gethwrappers/offchainaggregator"
 	ocrtypes "github.com/DCMMC/libocr/offchainreporting/types"
 )

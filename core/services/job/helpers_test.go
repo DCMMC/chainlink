@@ -9,20 +9,20 @@ import (
 
 	"github.com/lib/pq"
 
-	"github.com/smartcontractkit/chainlink/core/services/offchainreporting"
+	"github.com/DCMMC/chainlink/core/services/offchainreporting"
 
 	"gopkg.in/guregu/null.v4"
 
-	"github.com/smartcontractkit/chainlink/core/store/models"
+	"github.com/DCMMC/chainlink/core/store/models"
 	"gorm.io/gorm"
 
-	"github.com/smartcontractkit/chainlink/core/services/job"
+	"github.com/DCMMC/chainlink/core/services/job"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/pelletier/go-toml"
 	"github.com/stretchr/testify/require"
 
-	"github.com/smartcontractkit/chainlink/core/internal/cltest"
+	"github.com/DCMMC/chainlink/core/internal/cltest"
 )
 
 const (
