@@ -7,7 +7,8 @@ import (
 
 	"github.com/smartcontractkit/chainlink/core/auth"
 	"github.com/smartcontractkit/chainlink/core/internal/cltest"
-	"github.com/smartcontractkit/chainlink/core/sessions"
+	"github.com/smartcontractkit/chainlink/core/store"
+	"github.com/smartcontractkit/chainlink/core/store/models"
 	"github.com/smartcontractkit/chainlink/core/web"
 
 	"github.com/gin-gonic/gin"
@@ -29,25 +30,25 @@ func authSuccess(web.AuthStorer, *gin.Context) error {
 }
 
 type userFindFailer struct {
-	sessions.ORM
+	*store.Store
 	err error
 }
 
-func (u userFindFailer) FindUser() (sessions.User, error) {
-	return sessions.User{}, u.err
+func (u userFindFailer) FindUser() (models.User, error) {
+	return models.User{}, u.err
 }
 
 type userFindSuccesser struct {
-	sessions.ORM
-	user sessions.User
+	*store.Store
+	user models.User
 }
 
-func (u userFindSuccesser) FindUser() (sessions.User, error) {
+func (u userFindSuccesser) FindUser() (models.User, error) {
 	return u.user, nil
 }
 
 func TestAuthenticateByToken_Success(t *testing.T) {
-	user := cltest.MustRandomUser(t)
+	user := cltest.MustRandomUser()
 	apiToken := auth.Token{AccessKey: cltest.APIKey, Secret: cltest.APISecret}
 	err := user.SetAuthToken(&apiToken)
 	require.NoError(t, err)

@@ -5,7 +5,6 @@ import (
 	"testing"
 
 	"github.com/pkg/errors"
-	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/smartcontractkit/chainlink/core/services/pipeline"
@@ -322,9 +321,7 @@ func TestJSONParseTask(t *testing.T) {
 				Data:     test.data,
 				Lax:      test.lax,
 			}
-			result, runInfo := task.Run(context.Background(), test.vars, test.inputs)
-			assert.False(t, runInfo.IsPending)
-			assert.False(t, runInfo.IsRetryable)
+			result := task.Run(context.Background(), test.vars, test.inputs)
 
 			if test.wantErrorCause != nil {
 				require.Equal(t, test.wantErrorCause, errors.Cause(result.Error))

@@ -5,7 +5,6 @@ import (
 	"time"
 
 	"github.com/smartcontractkit/chainlink/core/auth"
-	"github.com/smartcontractkit/chainlink/core/bridges"
 	"github.com/smartcontractkit/chainlink/core/store/models"
 )
 
@@ -21,7 +20,7 @@ type ExternalInitiatorAuthentication struct {
 
 // NewExternalInitiatorAuthentication creates an instance of ExternalInitiatorAuthentication.
 func NewExternalInitiatorAuthentication(
-	ei bridges.ExternalInitiator,
+	ei models.ExternalInitiator,
 	eia auth.Token,
 ) *ExternalInitiatorAuthentication {
 	var result = &ExternalInitiatorAuthentication{
@@ -64,7 +63,7 @@ type ExternalInitiatorResource struct {
 	UpdatedAt     time.Time      `json:"updatedAt"`
 }
 
-func NewExternalInitiatorResource(ei bridges.ExternalInitiator) ExternalInitiatorResource {
+func NewExternalInitiatorResource(ei models.ExternalInitiator) ExternalInitiatorResource {
 	return ExternalInitiatorResource{
 		JAID:          NewJAID(fmt.Sprintf("%d", ei.ID)),
 		Name:          ei.Name,

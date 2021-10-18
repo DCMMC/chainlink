@@ -8,10 +8,10 @@ import (
 	"strings"
 	"syscall"
 
+	"github.com/smartcontractkit/chainlink/core/logger"
+
 	"golang.org/x/term"
 )
-
-//go:generate mockery --name Prompter --output ./mocks/ --case=underscore
 
 // Prompter implements the Prompt function to be used to display at
 // the console.
@@ -36,8 +36,7 @@ func (tp terminalPrompter) Prompt(prompt string) string {
 	fmt.Print(prompt)
 	line, err := reader.ReadString('\n')
 	if err != nil {
-		fmt.Print(err)
-		os.Exit(1)
+		logger.Fatal(err)
 	}
 	clearLine()
 	return strings.TrimSpace(line)
@@ -51,8 +50,7 @@ func (tp terminalPrompter) PasswordPrompt(prompt string) string {
 		fmt.Print(prompt)
 		bytePwd, err := term.ReadPassword(int(os.Stdin.Fd()))
 		if err != nil {
-			fmt.Print(err)
-			os.Exit(1)
+			logger.Fatal(err)
 		}
 		clearLine()
 		rval = string(bytePwd)
@@ -74,8 +72,7 @@ func withTerminalResetter(f func()) {
 
 	initialTermState, err := term.GetState(osSafeStdin)
 	if err != nil {
-		fmt.Print(err)
-		os.Exit(1)
+		logger.Fatal(err)
 	}
 
 	c := make(chan os.Signal, 1)
@@ -83,9 +80,7 @@ func withTerminalResetter(f func()) {
 	go func() {
 		<-c
 		err := term.Restore(osSafeStdin, initialTermState)
-		if err != nil {
-			fmt.Printf("Error restoring terminal: %v", err)
-		}
+		logger.ErrorIf(err, "failed when restore terminal")
 		os.Exit(1)
 	}()
 

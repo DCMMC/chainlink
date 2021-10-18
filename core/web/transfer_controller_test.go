@@ -19,11 +19,12 @@ import (
 func TestTransfersController_CreateSuccess_From(t *testing.T) {
 	t.Parallel()
 
-	app := cltest.NewApplicationWithKey(t)
+	app, cleanup := cltest.NewApplicationWithKey(t)
+	t.Cleanup(cleanup)
 	require.NoError(t, app.Start())
 
 	client := app.NewHTTPClient()
-	_, from := cltest.MustInsertRandomKey(t, app.KeyStore.Eth(), 0)
+	_, from := cltest.MustAddRandomKeyToKeystore(t, app.KeyStore.Eth(), 0)
 
 	request := models.SendEtherRequest{
 		DestinationAddress: common.HexToAddress("0xFA01FA015C8A5332987319823728982379128371"),
@@ -41,16 +42,16 @@ func TestTransfersController_CreateSuccess_From(t *testing.T) {
 	assert.Equal(t, http.StatusOK, resp.StatusCode)
 	assert.Len(t, errors.Errors, 0)
 
-	var count int64
-	err = app.GetDB().Model(bulletprooftxmanager.EthTx{}).Count(&count).Error
+	count, err := app.GetStore().CountOf(bulletprooftxmanager.EthTx{})
 	require.NoError(t, err)
-	assert.Equal(t, int64(1), count)
+	assert.Equal(t, 1, count)
 }
 
 func TestTransfersController_TransferError(t *testing.T) {
 	t.Parallel()
 
-	app := cltest.NewApplicationWithKey(t)
+	app, cleanup := cltest.NewApplicationWithKey(t)
+	t.Cleanup(cleanup)
 	require.NoError(t, app.Start())
 
 	client := app.NewHTTPClient()
@@ -72,7 +73,8 @@ func TestTransfersController_TransferError(t *testing.T) {
 func TestTransfersController_JSONBindingError(t *testing.T) {
 	t.Parallel()
 
-	app := cltest.NewApplicationWithKey(t)
+	app, cleanup := cltest.NewApplicationWithKey(t)
+	t.Cleanup(cleanup)
 	require.NoError(t, app.Start())
 
 	client := app.NewHTTPClient()

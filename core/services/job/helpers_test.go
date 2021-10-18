@@ -5,19 +5,24 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/lib/pq"
-	"github.com/pelletier/go-toml"
 	uuid "github.com/satori/go.uuid"
-	"github.com/smartcontractkit/chainlink/core/internal/cltest"
-	"github.com/smartcontractkit/chainlink/core/internal/testutils/evmtest"
-	"github.com/smartcontractkit/chainlink/core/services/job"
+
+	"github.com/lib/pq"
+
 	"github.com/smartcontractkit/chainlink/core/services/offchainreporting"
-	"github.com/smartcontractkit/chainlink/core/store/config"
-	"github.com/smartcontractkit/chainlink/core/store/models"
-	"github.com/stretchr/testify/require"
+
 	"gopkg.in/guregu/null.v4"
+
+	"github.com/smartcontractkit/chainlink/core/store/models"
 	"gorm.io/gorm"
+
+	"github.com/smartcontractkit/chainlink/core/services/job"
+
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/pelletier/go-toml"
+	"github.com/stretchr/testify/require"
+
+	"github.com/smartcontractkit/chainlink/core/internal/cltest"
 )
 
 const (
@@ -167,7 +172,8 @@ func compareOCRJobSpecs(t *testing.T, expected, actual job.Job) {
 	require.Equal(t, expected.OffchainreportingOracleSpec.ContractConfigConfirmations, actual.OffchainreportingOracleSpec.ContractConfigConfirmations)
 }
 
-func makeMinimalHTTPOracleSpec(t *testing.T, db *gorm.DB, cfg config.GeneralConfig, contractAddress, peerID, transmitterAddress, keyBundle, fetchUrl, timeout string) *job.Job {
+func makeMinimalHTTPOracleSpec(t *testing.T, contractAddress, peerID, transmitterAddress, keyBundle, fetchUrl, timeout string) *job.Job {
+	t.Helper()
 	var ocrSpec = job.OffchainReportingOracleSpec{
 		P2PBootstrapPeers:                      pq.StringArray{},
 		ObservationTimeout:                     models.Interval(10 * time.Second),
@@ -183,8 +189,9 @@ func makeMinimalHTTPOracleSpec(t *testing.T, db *gorm.DB, cfg config.GeneralConf
 		ExternalJobID: uuid.NewV4(),
 	}
 	s := fmt.Sprintf(minimalNonBootstrapTemplate, contractAddress, peerID, transmitterAddress, keyBundle, fetchUrl, timeout)
-	cc := evmtest.NewChainSet(t, evmtest.TestChainOpts{DB: db, Client: cltest.NewEthClientMockWithDefaultChain(t), GeneralConfig: cfg})
-	_, err := offchainreporting.ValidatedOracleSpecToml(cc, s)
+	c, cl := cltest.NewConfig(t)
+	defer cl()
+	_, err := offchainreporting.ValidatedOracleSpecToml(c.Config, s)
 	require.NoError(t, err)
 	err = toml.Unmarshal([]byte(s), &os)
 	require.NoError(t, err)
@@ -220,10 +227,8 @@ func makeSimpleFetchOCRJobSpecWithHTTPURL(t *testing.T, db *gorm.DB, transmitter
 func makeOCRJobSpecFromToml(t *testing.T, db *gorm.DB, jobSpecToml string) *job.Job {
 	t.Helper()
 
-	id := uuid.NewV4()
 	var jb = job.Job{
-		Name:          null.StringFrom(id.String()),
-		ExternalJobID: id,
+		ExternalJobID: uuid.NewV4(),
 	}
 	err := toml.Unmarshal([]byte(jobSpecToml), &jb)
 	require.NoError(t, err)

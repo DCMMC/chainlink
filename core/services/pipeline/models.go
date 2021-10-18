@@ -37,12 +37,11 @@ type Run struct {
 	ID             int64            `json:"-" gorm:"primary_key"`
 	PipelineSpecID int32            `json:"-"`
 	PipelineSpec   Spec             `json:"pipelineSpec"`
-	Meta           JSONSerializable `json:"meta" gorm:"type:jsonb"`
+	Meta           JSONSerializable `json:"meta"`
 	// The errors are only ever strings
 	// DB example: [null, null, "my error"]
-	AllErrors   RunErrors        `json:"all_errors" gorm:"type:jsonb"`
-	FatalErrors RunErrors        `json:"fatal_errors" gorm:"type:jsonb"`
-	Inputs      JSONSerializable `json:"inputs" gorm:"type:jsonb"`
+	Errors RunErrors        `json:"errors" gorm:"type:jsonb"`
+	Inputs JSONSerializable `json:"inputs" gorm:"type:jsonb"`
 	// Its expected that Output.Val is of type []interface{}.
 	// DB example: [1234, {"a": 10}, null]
 	Outputs          JSONSerializable `json:"outputs" gorm:"type:jsonb"`
@@ -51,6 +50,7 @@ type Run struct {
 	PipelineTaskRuns []TaskRun        `json:"taskRuns" gorm:"foreignkey:PipelineRunID;->"`
 	State            RunStatus        `json:"state"`
 
+	Async     bool `gorm:"-"`
 	Pending   bool `gorm:"-"`
 	FailEarly bool `gorm:"-"`
 }
@@ -72,17 +72,8 @@ func (r *Run) SetID(value string) error {
 	return nil
 }
 
-func (r Run) HasFatalErrors() bool {
-	for _, err := range r.FatalErrors {
-		if !err.IsZero() {
-			return true
-		}
-	}
-	return false
-}
-
 func (r Run) HasErrors() bool {
-	for _, err := range r.AllErrors {
+	for _, err := range r.Errors {
 		if !err.IsZero() {
 			return true
 		}
@@ -92,7 +83,7 @@ func (r Run) HasErrors() bool {
 
 // Status determines the status of the run.
 func (r *Run) Status() RunStatus {
-	if r.HasFatalErrors() {
+	if r.HasErrors() {
 		return RunStatusErrored
 	} else if r.FinishedAt.Valid {
 		return RunStatusCompleted
@@ -139,35 +130,17 @@ func (re RunErrors) HasError() bool {
 	return false
 }
 
-type ResumeRequest struct {
-	Error null.String     `json:"error"`
-	Value json.RawMessage `json:"value"`
-}
-
-func (rr ResumeRequest) ToResult() (Result, error) {
-	var res Result
-	if rr.Error.Valid && rr.Value == nil {
-		res.Error = errors.New(rr.Error.ValueOrZero())
-		return res, nil
-	}
-	if !rr.Error.Valid && rr.Value != nil {
-		res.Value = []byte(rr.Value)
-		return res, nil
-	}
-	return Result{}, errors.New("must provide only one of either 'value' or 'error' key")
-}
-
 type TaskRun struct {
-	ID            uuid.UUID        `json:"id" gorm:"primary_key"`
-	Type          TaskType         `json:"type"`
-	PipelineRun   Run              `json:"-"`
-	PipelineRunID int64            `json:"-"`
-	Output        JSONSerializable `json:"output" gorm:"type:jsonb"`
-	Error         null.String      `json:"error"`
-	CreatedAt     time.Time        `json:"createdAt"`
-	FinishedAt    null.Time        `json:"finishedAt"`
-	Index         int32            `json:"index"`
-	DotID         string           `json:"dotId"`
+	ID            uuid.UUID         `json:"id" gorm:"primary_key"`
+	Type          TaskType          `json:"type"`
+	PipelineRun   Run               `json:"-"`
+	PipelineRunID int64             `json:"-"`
+	Output        *JSONSerializable `json:"output" gorm:"type:jsonb"`
+	Error         null.String       `json:"error"`
+	CreatedAt     time.Time         `json:"createdAt"`
+	FinishedAt    null.Time         `json:"finishedAt"`
+	Index         int32             `json:"index"`
+	DotID         string            `json:"dotId"`
 
 	// Used internally for sorting completed results
 	task Task
@@ -198,7 +171,7 @@ func (tr TaskRun) Result() Result {
 	var result Result
 	if !tr.Error.IsZero() {
 		result.Error = errors.New(tr.Error.ValueOrZero())
-	} else if tr.Output.Valid && tr.Output.Val != nil {
+	} else if tr.Output != nil && tr.Output.Val != nil {
 		result.Value = tr.Output.Val
 	}
 	return result

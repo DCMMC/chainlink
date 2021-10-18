@@ -7,8 +7,8 @@ import (
 	"testing"
 
 	"github.com/smartcontractkit/chainlink/core/auth"
-	"github.com/smartcontractkit/chainlink/core/bridges"
 	"github.com/smartcontractkit/chainlink/core/internal/cltest"
+	"github.com/smartcontractkit/chainlink/core/store/models"
 	"github.com/smartcontractkit/chainlink/core/web"
 
 	"github.com/stretchr/testify/assert"
@@ -16,51 +16,66 @@ import (
 )
 
 func TestTokenAuthRequired_NoCredentials(t *testing.T) {
-	app := cltest.NewApplicationEVMDisabled(t)
+	ethClient, _, assertMocksCalled := cltest.NewEthMocksWithStartupAssertions(t)
+	defer assertMocksCalled()
+	app, cleanup := cltest.NewApplicationWithKey(t,
+		ethClient,
+	)
+	defer cleanup()
 	require.NoError(t, app.Start())
 
-	router := web.Router(app, nil)
+	router := web.Router(app)
 	ts := httptest.NewServer(router)
 	defer ts.Close()
 
-	resp, err := http.Post(ts.URL+"/v2/jobs/", web.MediaType, bytes.NewBufferString("{}"))
+	resp, err := http.Post(ts.URL+"/v2/specs/", web.MediaType, bytes.NewBufferString("{}"))
 	require.NoError(t, err)
 
 	assert.Equal(t, http.StatusUnauthorized, resp.StatusCode)
 }
 
 func TestTokenAuthRequired_SessionCredentials(t *testing.T) {
-	app := cltest.NewApplicationEVMDisabled(t)
+	ethClient, _, assertMocksCalled := cltest.NewEthMocksWithStartupAssertions(t)
+	defer assertMocksCalled()
+	app, cleanup := cltest.NewApplicationWithKey(t,
+		ethClient,
+	)
+	defer cleanup()
 	require.NoError(t, app.Start())
 
-	router := web.Router(app, nil)
+	router := web.Router(app)
 	ts := httptest.NewServer(router)
 	defer ts.Close()
 
 	client := app.NewHTTPClient()
-	resp, cleanup := client.Post("/v2/bridge_types/", nil)
+	resp, cleanup := client.Post("/v2/specs/", nil)
 	defer cleanup()
 
-	assert.Equal(t, http.StatusUnprocessableEntity, resp.StatusCode)
+	assert.Equal(t, http.StatusBadRequest, resp.StatusCode)
 }
 
 func TestTokenAuthRequired_TokenCredentials(t *testing.T) {
-	app := cltest.NewApplicationEVMDisabled(t)
+	ethClient, _, assertMocksCalled := cltest.NewEthMocksWithStartupAssertions(t)
+	defer assertMocksCalled()
+	app, cleanup := cltest.NewApplicationWithKey(t,
+		ethClient,
+	)
+	defer cleanup()
 	require.NoError(t, app.Start())
 
-	router := web.Router(app, nil)
+	router := web.Router(app)
 	ts := httptest.NewServer(router)
 	defer ts.Close()
 
 	eia := auth.NewToken()
 	url := cltest.WebURL(t, "http://localhost:8888")
-	eir := &bridges.ExternalInitiatorRequest{
+	eir := &models.ExternalInitiatorRequest{
 		Name: "bitcoin",
 		URL:  &url,
 	}
-	ea, err := bridges.NewExternalInitiator(eia, eir)
+	ea, err := models.NewExternalInitiator(eia, eir)
 	require.NoError(t, err)
-	err = app.BridgeORM().CreateExternalInitiator(ea)
+	err = app.GetStore().CreateExternalInitiator(ea)
 	require.NoError(t, err)
 
 	request, err := http.NewRequest("GET", ts.URL+"/v2/ping/", bytes.NewBufferString("{}"))
@@ -77,22 +92,27 @@ func TestTokenAuthRequired_TokenCredentials(t *testing.T) {
 }
 
 func TestTokenAuthRequired_BadTokenCredentials(t *testing.T) {
-	app := cltest.NewApplicationEVMDisabled(t)
+	ethClient, _, assertMocksCalled := cltest.NewEthMocksWithStartupAssertions(t)
+	defer assertMocksCalled()
+	app, cleanup := cltest.NewApplicationWithKey(t,
+		ethClient,
+	)
+	defer cleanup()
 	require.NoError(t, app.Start())
 
-	router := web.Router(app, nil)
+	router := web.Router(app)
 	ts := httptest.NewServer(router)
 	defer ts.Close()
 
 	eia := auth.NewToken()
 	url := cltest.WebURL(t, "http://localhost:8888")
-	eir := &bridges.ExternalInitiatorRequest{
+	eir := &models.ExternalInitiatorRequest{
 		Name: "bitcoin",
 		URL:  &url,
 	}
-	ea, err := bridges.NewExternalInitiator(eia, eir)
+	ea, err := models.NewExternalInitiator(eia, eir)
 	require.NoError(t, err)
-	err = app.BridgeORM().CreateExternalInitiator(ea)
+	err = app.GetStore().CreateExternalInitiator(ea)
 	require.NoError(t, err)
 
 	request, err := http.NewRequest("GET", ts.URL+"/v2/ping/", bytes.NewBufferString("{}"))
@@ -109,10 +129,15 @@ func TestTokenAuthRequired_BadTokenCredentials(t *testing.T) {
 }
 
 func TestSessions_RateLimited(t *testing.T) {
-	app := cltest.NewApplicationEVMDisabled(t)
+	ethClient, _, assertMocksCalled := cltest.NewEthMocksWithStartupAssertions(t)
+	defer assertMocksCalled()
+	app, cleanup := cltest.NewApplicationWithKey(t,
+		ethClient,
+	)
+	defer cleanup()
 	require.NoError(t, app.Start())
 
-	router := web.Router(app, nil)
+	router := web.Router(app)
 	ts := httptest.NewServer(router)
 	defer ts.Close()
 
@@ -137,10 +162,15 @@ func TestSessions_RateLimited(t *testing.T) {
 }
 
 func TestRouter_LargePOSTBody(t *testing.T) {
-	app := cltest.NewApplicationEVMDisabled(t)
+	ethClient, _, assertMocksCalled := cltest.NewEthMocksWithStartupAssertions(t)
+	defer assertMocksCalled()
+	app, cleanup := cltest.NewApplicationWithKey(t,
+		ethClient,
+	)
+	defer cleanup()
 	require.NoError(t, app.Start())
 
-	router := web.Router(app, nil)
+	router := web.Router(app)
 	ts := httptest.NewServer(router)
 	defer ts.Close()
 
@@ -156,10 +186,15 @@ func TestRouter_LargePOSTBody(t *testing.T) {
 }
 
 func TestRouter_GinHelmetHeaders(t *testing.T) {
-	app := cltest.NewApplicationEVMDisabled(t)
+	ethClient, _, assertMocksCalled := cltest.NewEthMocksWithStartupAssertions(t)
+	defer assertMocksCalled()
+	app, cleanup := cltest.NewApplicationWithKey(t,
+		ethClient,
+	)
+	defer cleanup()
 	require.NoError(t, app.Start())
 
-	router := web.Router(app, nil)
+	router := web.Router(app)
 	ts := httptest.NewServer(router)
 	defer ts.Close()
 	res, err := http.Get(ts.URL)

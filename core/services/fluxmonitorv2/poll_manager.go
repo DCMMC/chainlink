@@ -7,7 +7,6 @@ import (
 	"github.com/smartcontractkit/chainlink/core/internal/gethwrappers/generated/flux_aggregator_wrapper"
 	"github.com/smartcontractkit/chainlink/core/logger"
 	"github.com/smartcontractkit/chainlink/core/utils"
-	"go.uber.org/atomic"
 )
 
 type PollManagerConfig struct {
@@ -51,7 +50,6 @@ type PollManagerConfig struct {
 type PollManager struct {
 	cfg PollManagerConfig
 
-	isHibernating    *atomic.Bool
 	hibernationTimer utils.ResettableTimer
 	pollTicker       utils.PausableTicker
 	idleTimer        utils.ResettableTimer
@@ -60,11 +58,11 @@ type PollManager struct {
 	drumbeat         utils.CronTicker
 	chPoll           chan PollRequest
 
-	logger logger.Logger
+	logger *logger.Logger
 }
 
 // NewPollManager initializes a new PollManager
-func NewPollManager(cfg PollManagerConfig, logger logger.Logger) (*PollManager, error) {
+func NewPollManager(cfg PollManagerConfig, logger *logger.Logger) (*PollManager, error) {
 	minBackoffDuration := cfg.MinRetryBackoffDuration
 	if cfg.IdleTimerPeriod < minBackoffDuration {
 		minBackoffDuration = cfg.IdleTimerPeriod
@@ -93,7 +91,6 @@ func NewPollManager(cfg PollManagerConfig, logger logger.Logger) (*PollManager, 
 		cfg:    cfg,
 		logger: logger,
 
-		isHibernating:    atomic.NewBool(cfg.IsHibernating),
 		hibernationTimer: utils.NewResettableTimer(),
 		pollTicker:       utils.NewPausableTicker(cfg.PollTickerInterval),
 		idleTimer:        idleTimer,
@@ -145,7 +142,7 @@ func (pm *PollManager) Poll() <-chan PollRequest {
 // Start initializes all the timers and determines whether to go into immediate
 // hibernation.
 func (pm *PollManager) Start(hibernate bool, roundState flux_aggregator_wrapper.OracleRoundState) {
-	pm.isHibernating.Store(hibernate)
+	pm.cfg.IsHibernating = hibernate
 
 	if pm.ShouldPerformInitialPoll() {
 		// We want this to be non blocking but if there is no received for the
@@ -172,13 +169,13 @@ func (pm *PollManager) Start(hibernate bool, roundState flux_aggregator_wrapper.
 
 // ShouldPerformInitialPoll determines whether to perform an initial poll
 func (pm *PollManager) ShouldPerformInitialPoll() bool {
-	return (!pm.cfg.PollTickerDisabled || !pm.cfg.IdleTimerDisabled) && !pm.isHibernating.Load()
+	return (!pm.cfg.PollTickerDisabled || !pm.cfg.IdleTimerDisabled) && !pm.cfg.IsHibernating
 }
 
 // Reset resets the timers except for the hibernation timer. Will not reset if
 // hibernating.
 func (pm *PollManager) Reset(roundState flux_aggregator_wrapper.OracleRoundState) {
-	if pm.isHibernating.Load() {
+	if pm.cfg.IsHibernating {
 		pm.hibernationTimer.Reset(pm.cfg.HibernationPollPeriod)
 	} else {
 		pm.startPollTicker()
@@ -190,7 +187,7 @@ func (pm *PollManager) Reset(roundState flux_aggregator_wrapper.OracleRoundState
 
 // ResetIdleTimer resets the idle timer unless hibernating
 func (pm *PollManager) ResetIdleTimer(roundStartedAtUTC uint64) {
-	if !pm.isHibernating.Load() {
+	if !pm.cfg.IsHibernating {
 		pm.startIdleTimer(roundStartedAtUTC)
 	}
 }
@@ -222,7 +219,7 @@ func (pm *PollManager) Hibernate() {
 	pm.logger.Infof("entering hibernation mode (period: %v)", pm.cfg.HibernationPollPeriod)
 
 	// Start the hibernation timer
-	pm.isHibernating.Store(true)
+	pm.cfg.IsHibernating = true
 	pm.hibernationTimer.Reset(pm.cfg.HibernationPollPeriod)
 
 	// Stop the other tickers
@@ -239,7 +236,7 @@ func (pm *PollManager) Awaken(roundState flux_aggregator_wrapper.OracleRoundStat
 	pm.logger.Info("exiting hibernation mode, reactivating contract")
 
 	// Stop the hibernation timer
-	pm.isHibernating.Store(false)
+	pm.cfg.IsHibernating = false
 	pm.hibernationTimer.Stop()
 
 	// Start the other tickers

@@ -4,11 +4,10 @@ import (
 	"os"
 
 	"github.com/pkg/errors"
-
 	"github.com/smartcontractkit/chainlink/core/cmd"
 	"github.com/smartcontractkit/chainlink/core/logger"
-	"github.com/smartcontractkit/chainlink/core/sessions"
 	"github.com/smartcontractkit/chainlink/core/store/config"
+	"github.com/smartcontractkit/chainlink/core/store/models"
 )
 
 func main() {
@@ -18,17 +17,16 @@ func main() {
 // Run runs the CLI, providing further command instructions by default.
 func Run(client *cmd.Client, args ...string) {
 	app := cmd.NewApp(client)
-	logger.Default.WarnIf(app.Run(args), "Error running app")
+	logger.WarnIf(app.Run(args))
 }
 
 // NewProductionClient configures an instance of the CLI to be used
 // in production.
 func NewProductionClient() *cmd.Client {
-	cfg := config.NewGeneralConfig()
-
+	cfg := config.NewConfig()
 	prompter := cmd.NewTerminalPrompter()
 	cookieAuth := cmd.NewSessionCookieAuthenticator(cfg, cmd.DiskCookieStore{Config: cfg})
-	sr := sessions.SessionRequest{}
+	sr := models.SessionRequest{}
 	sessionRequestBuilder := cmd.NewFileSessionRequestBuilder()
 	if credentialsFile := cfg.AdminCredentialsFile(); credentialsFile != "" {
 		var err error

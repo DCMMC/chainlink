@@ -1,13 +1,12 @@
 package web
 
 import (
-	"database/sql"
 	"net/http"
 
 	"github.com/smartcontractkit/chainlink/core/auth"
-	"github.com/smartcontractkit/chainlink/core/bridges"
-	clsessions "github.com/smartcontractkit/chainlink/core/sessions"
 	"github.com/smartcontractkit/chainlink/core/static"
+	"github.com/smartcontractkit/chainlink/core/store/models"
+	"github.com/smartcontractkit/chainlink/core/store/orm"
 
 	"github.com/gin-gonic/contrib/sessions"
 	"github.com/gin-gonic/gin"
@@ -22,19 +21,19 @@ const (
 )
 
 type AuthStorer interface {
-	AuthorizedUserWithSession(sessionID string) (clsessions.User, error)
-	FindExternalInitiator(eia *auth.Token) (*bridges.ExternalInitiator, error)
-	FindUser() (clsessions.User, error)
+	AuthorizedUserWithSession(sessionID string) (models.User, error)
+	FindExternalInitiator(eia *auth.Token) (*models.ExternalInitiator, error)
+	FindUser() (models.User, error)
 }
 
 type authType func(store AuthStorer, ctx *gin.Context) error
 
-func authenticatedUser(c *gin.Context) (*clsessions.User, bool) {
+func authenticatedUser(c *gin.Context) (*models.User, bool) {
 	obj, ok := c.Get(SessionUserKey)
 	if !ok {
 		return nil, false
 	}
-	return obj.(*clsessions.User), ok
+	return obj.(*models.User), ok
 }
 
 func AuthenticateExternalInitiator(store AuthStorer, c *gin.Context) error {
@@ -44,13 +43,13 @@ func AuthenticateExternalInitiator(store AuthStorer, c *gin.Context) error {
 	}
 
 	ei, err := store.FindExternalInitiator(eia)
-	if errors.Is(err, sql.ErrNoRows) {
+	if errors.Cause(err) == orm.ErrorNotFound {
 		return auth.ErrorAuthFailed
 	} else if err != nil {
 		return errors.Wrap(err, "finding external intiator")
 	}
 
-	ok, err := bridges.AuthenticateExternalInitiator(eia, ei)
+	ok, err := models.AuthenticateExternalInitiator(eia, ei)
 	if err != nil {
 		return err
 	}
@@ -65,12 +64,12 @@ func AuthenticateExternalInitiator(store AuthStorer, c *gin.Context) error {
 
 var _ authType = AuthenticateExternalInitiator
 
-func authenticatedEI(c *gin.Context) (*bridges.ExternalInitiator, bool) {
+func authenticatedEI(c *gin.Context) (*models.ExternalInitiator, bool) {
 	obj, ok := c.Get(SessionExternalInitiatorKey)
 	if !ok {
 		return nil, false
 	}
-	return obj.(*bridges.ExternalInitiator), ok
+	return obj.(*models.ExternalInitiator), ok
 }
 
 // AuthenticateByToken authenticates a User by their API token.
@@ -81,13 +80,13 @@ func AuthenticateByToken(store AuthStorer, c *gin.Context) error {
 	}
 
 	user, err := store.FindUser()
-	if errors.Is(err, sql.ErrNoRows) {
+	if errors.Cause(err) == orm.ErrorNotFound {
 		return auth.ErrorAuthFailed
 	} else if err != nil {
 		return err
 	}
 
-	ok, err := clsessions.AuthenticateUserByToken(token, &user)
+	ok, err := models.AuthenticateUserByToken(token, &user)
 	if err != nil {
 		return err
 	} else if !ok {

@@ -6,7 +6,6 @@ import (
 
 	"github.com/pkg/errors"
 	"github.com/shopspring/decimal"
-	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/smartcontractkit/chainlink/core/services/pipeline"
@@ -90,9 +89,7 @@ func TestDivideTask_Happy(t *testing.T) {
 				Divisor:   test.divisor,
 				Precision: test.precision,
 			}
-			result, runInfo := task.Run(context.Background(), vars, []pipeline.Result{{Value: test.input}})
-			assert.False(t, runInfo.IsPending)
-			assert.False(t, runInfo.IsRetryable)
+			result := task.Run(context.Background(), vars, []pipeline.Result{{Value: test.input}})
 			require.NoError(t, result.Error)
 			require.Equal(t, test.expected.String(), result.Value.(decimal.Decimal).String())
 		})
@@ -112,9 +109,7 @@ func TestDivideTask_Happy(t *testing.T) {
 				Divisor:   "$(chain.link)",
 				Precision: "$(sergey.steve)",
 			}
-			result, runInfo := task.Run(context.Background(), vars, []pipeline.Result{})
-			assert.False(t, runInfo.IsPending)
-			assert.False(t, runInfo.IsRetryable)
+			result := task.Run(context.Background(), vars, []pipeline.Result{})
 			require.NoError(t, result.Error)
 			require.Equal(t, test.expected.String(), result.Value.(decimal.Decimal).String())
 		})
@@ -152,9 +147,7 @@ func TestDivideTask_Unhappy(t *testing.T) {
 				Input:    test.input,
 				Divisor:  test.divisor,
 			}
-			result, runInfo := task.Run(context.Background(), test.vars, test.inputs)
-			assert.False(t, runInfo.IsPending)
-			assert.False(t, runInfo.IsRetryable)
+			result := task.Run(context.Background(), test.vars, test.inputs)
 			require.Equal(t, test.wantErrorCause, errors.Cause(result.Error))
 			if test.wantErrorContains != "" {
 				require.Contains(t, result.Error.Error(), test.wantErrorContains)

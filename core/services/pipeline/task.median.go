@@ -25,7 +25,7 @@ func (t *MedianTask) Type() TaskType {
 	return TaskTypeMedian
 }
 
-func (t *MedianTask) Run(_ context.Context, vars Vars, inputs []Result) (result Result, runInfo RunInfo) {
+func (t *MedianTask) Run(_ context.Context, vars Vars, inputs []Result) (result Result) {
 	var (
 		maybeAllowedFaults MaybeUint64Param
 		valuesAndErrs      SliceParam
@@ -38,7 +38,7 @@ func (t *MedianTask) Run(_ context.Context, vars Vars, inputs []Result) (result 
 		errors.Wrap(ResolveParam(&valuesAndErrs, From(VarExpr(t.Values, vars), JSONWithVarExprs(t.Values, vars, true), Inputs(inputs))), "values"),
 	)
 	if err != nil {
-		return Result{Error: err}, runInfo
+		return Result{Error: err}
 	}
 
 	if allowed, isSet := maybeAllowedFaults.Uint64(); isSet {
@@ -49,14 +49,14 @@ func (t *MedianTask) Run(_ context.Context, vars Vars, inputs []Result) (result 
 
 	values, faults := valuesAndErrs.FilterErrors()
 	if faults > allowedFaults {
-		return Result{Error: errors.Wrapf(ErrTooManyErrors, "Number of faulty inputs %v to median task > number allowed faults %v", faults, allowedFaults)}, runInfo
+		return Result{Error: errors.Wrapf(ErrTooManyErrors, "Number of faulty inputs %v to median task > number allowed faults %v", faults, allowedFaults)}
 	} else if len(values) == 0 {
-		return Result{Error: errors.Wrap(ErrWrongInputCardinality, "no values to medianize")}, runInfo
+		return Result{Error: errors.Wrap(ErrWrongInputCardinality, "no values to medianize")}
 	}
 
 	err = decimalValues.UnmarshalPipelineParam(values)
 	if err != nil {
-		return Result{Error: err}, runInfo
+		return Result{Error: err}
 	}
 
 	sort.Slice(decimalValues, func(i, j int) bool {
@@ -64,8 +64,8 @@ func (t *MedianTask) Run(_ context.Context, vars Vars, inputs []Result) (result 
 	})
 	k := len(decimalValues) / 2
 	if len(decimalValues)%2 == 1 {
-		return Result{Value: decimalValues[k]}, runInfo
+		return Result{Value: decimalValues[k]}
 	}
 	median := decimalValues[k].Add(decimalValues[k-1]).Div(decimal.NewFromInt(2))
-	return Result{Value: median}, runInfo
+	return Result{Value: median}
 }

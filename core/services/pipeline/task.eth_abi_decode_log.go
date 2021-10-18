@@ -25,10 +25,10 @@ func (t *ETHABIDecodeLogTask) Type() TaskType {
 	return TaskTypeETHABIDecodeLog
 }
 
-func (t *ETHABIDecodeLogTask) Run(_ context.Context, vars Vars, inputs []Result) (result Result, runInfo RunInfo) {
+func (t *ETHABIDecodeLogTask) Run(_ context.Context, vars Vars, inputs []Result) (result Result) {
 	_, err := CheckInputs(inputs, -1, -1, 0)
 	if err != nil {
-		return Result{Error: errors.Wrap(err, "task inputs")}, runInfo
+		return Result{Error: errors.Wrap(err, "task inputs")}
 	}
 
 	var (
@@ -42,28 +42,28 @@ func (t *ETHABIDecodeLogTask) Run(_ context.Context, vars Vars, inputs []Result)
 		errors.Wrap(ResolveParam(&theABI, From(NonemptyString(t.ABI))), "abi"),
 	)
 	if err != nil {
-		return Result{Error: err}, runInfo
+		return Result{Error: err}
 	}
 
 	_, args, indexedArgs, err := parseETHABIString([]byte(theABI), true)
 	if err != nil {
-		return Result{Error: errors.Wrap(ErrBadInput, err.Error())}, runInfo
+		return Result{Error: errors.Wrap(ErrBadInput, err.Error())}
 	}
 
 	out := make(map[string]interface{})
 	if len(data) > 0 {
 		if err2 := args.UnpackIntoMap(out, []byte(data)); err2 != nil {
-			return Result{Error: errors.Wrap(ErrBadInput, err2.Error())}, runInfo
+			return Result{Error: errors.Wrap(ErrBadInput, err2.Error())}
 		}
 	}
 	if len(indexedArgs) > 0 {
 		if len(topics) != len(indexedArgs)+1 {
-			return Result{Error: errors.Wrap(ErrBadInput, "topic/field count mismatch")}, runInfo
+			return Result{Error: errors.Wrap(ErrBadInput, "topic/field count mismatch")}
 		}
 		err = abi.ParseTopicsIntoMap(out, indexedArgs, topics[1:])
 		if err != nil {
-			return Result{Error: errors.Wrap(ErrBadInput, err.Error())}, runInfo
+			return Result{Error: errors.Wrap(ErrBadInput, err.Error())}
 		}
 	}
-	return Result{Value: out}, runInfo
+	return Result{Value: out}
 }

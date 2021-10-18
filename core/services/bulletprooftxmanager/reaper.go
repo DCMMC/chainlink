@@ -2,14 +2,13 @@ package bulletprooftxmanager
 
 import (
 	"fmt"
-	"math/big"
+	"sync/atomic"
 	"time"
 
 	"github.com/pkg/errors"
 	"github.com/smartcontractkit/chainlink/core/logger"
 	"github.com/smartcontractkit/chainlink/core/services/postgres"
-	"github.com/smartcontractkit/chainlink/core/utils"
-	"go.uber.org/atomic"
+	"github.com/smartcontractkit/chainlink/core/store/models"
 	"gorm.io/gorm"
 )
 
@@ -19,29 +18,27 @@ import (
 type ReaperConfig interface {
 	EthTxReaperInterval() time.Duration
 	EthTxReaperThreshold() time.Duration
-	EvmFinalityDepth() uint32
+	EthFinalityDepth() uint
 }
 
 // Reaper handles periodic database cleanup for BPTXM
 type Reaper struct {
 	db             *gorm.DB
 	config         ReaperConfig
-	chainID        utils.Big
-	log            logger.Logger
-	latestBlockNum *atomic.Int64
+	log            *logger.Logger
+	latestBlockNum int64
 	trigger        chan struct{}
 	chStop         chan struct{}
 	chDone         chan struct{}
 }
 
 // NewReaper instantiates a new reaper object
-func NewReaper(lggr logger.Logger, db *gorm.DB, config ReaperConfig, chainID big.Int) *Reaper {
+func NewReaper(db *gorm.DB, config ReaperConfig) *Reaper {
 	return &Reaper{
 		db,
 		config,
-		*utils.NewBig(&chainID),
-		lggr.Named("bptxm_reaper"),
-		atomic.NewInt64(-1),
+		logger.CreateLogger(logger.Default.With("id", "bptxm_reaper")),
+		-1,
 		make(chan struct{}, 1),
 		make(chan struct{}),
 		make(chan struct{}),
@@ -78,13 +75,17 @@ func (r *Reaper) runLoop() {
 }
 
 func (r *Reaper) work() {
-	latestBlockNum := r.latestBlockNum.Load()
+	latestBlockNum := atomic.LoadInt64(&r.latestBlockNum)
 	if latestBlockNum < 0 {
 		return
 	}
 	err := r.ReapEthTxes(latestBlockNum)
 	if err != nil {
 		r.log.Error("BPTXMReaper: unable to reap old eth_txes: ", err)
+	}
+	err = r.ReapJobRuns()
+	if err != nil {
+		r.log.Error("BPTXMReaper: unable to reap old runs: ", err)
 	}
 }
 
@@ -93,7 +94,7 @@ func (r *Reaper) SetLatestBlockNum(latestBlockNum int64) {
 	if latestBlockNum < 0 {
 		panic(fmt.Sprintf("latestBlockNum must be 0 or greater, got: %d", latestBlockNum))
 	}
-	was := r.latestBlockNum.Swap(latestBlockNum)
+	was := atomic.SwapInt64(&r.latestBlockNum, latestBlockNum)
 	if was < 0 {
 		// Run reaper once on startup
 		r.trigger <- struct{}{}
@@ -107,7 +108,7 @@ func (r *Reaper) ReapEthTxes(headNum int64) error {
 		r.log.Debug("BPTXMReaper: ETH_TX_REAPER_THRESHOLD set to 0; skipping ReapEthTxes")
 		return nil
 	}
-	minBlockNumberToKeep := headNum - int64(r.config.EvmFinalityDepth())
+	minBlockNumberToKeep := headNum - int64(r.config.EthFinalityDepth())
 	mark := time.Now()
 	timeThreshold := mark.Add(-threshold)
 
@@ -129,8 +130,7 @@ USING old_enough_receipts, eth_tx_attempts
 WHERE eth_tx_attempts.eth_tx_id = eth_txes.id
 AND eth_tx_attempts.hash = old_enough_receipts.tx_hash
 AND eth_txes.created_at < ?
-AND eth_txes.state = 'confirmed'
-AND evm_chain_id = ?`, minBlockNumberToKeep, limit, timeThreshold, r.chainID)
+AND eth_txes.state = 'confirmed'`, minBlockNumberToKeep, limit, timeThreshold)
 		if res.Error != nil {
 			return count, res.Error
 		}
@@ -144,8 +144,7 @@ AND evm_chain_id = ?`, minBlockNumberToKeep, limit, timeThreshold, r.chainID)
 		res := r.db.Exec(`
 DELETE FROM eth_txes
 WHERE created_at < ?
-AND state = 'fatal_error'
-AND evm_chain_id = ?`, timeThreshold, r.chainID)
+AND state = 'fatal_error'`, timeThreshold)
 		if res.Error != nil {
 			return count, res.Error
 		}
@@ -158,4 +157,24 @@ AND evm_chain_id = ?`, timeThreshold, r.chainID)
 	r.log.Debugf("BPTXMReaper: ReapEthTxes completed in %v", time.Since(mark))
 
 	return nil
+}
+
+// ReapJobRuns removes old job runs
+// HACK: This isn't quite the right place for it, but since we are killing the
+// old pipeline this code is temporary anyway
+func (r *Reaper) ReapJobRuns() error {
+	threshold := r.config.EthTxReaperThreshold() // Just re-use the EthTxReaperThreshold, it's probably close enough
+	if threshold == 0 {
+		r.log.Debug("BPTXMReaper: ETH_TX_REAPER_THRESHOLD set to 0; skipping ReapJobRuns")
+		return nil
+	}
+	mark := time.Now()
+	timeThreshold := mark.Add(-threshold)
+	r.log.Debugw(fmt.Sprintf("BPTXMReaper: reaping old job_runs last updated before %s", timeThreshold.Format(time.RFC3339)), "ageThreshold", threshold, "timeThreshold", timeThreshold)
+	request := &models.BulkDeleteRunRequest{
+		Status:        []models.RunStatus{models.RunStatusCompleted, models.RunStatusErrored},
+		UpdatedBefore: timeThreshold,
+	}
+	r.log.Debugf("BPTXMReaper: ReapJobRuns completed in %v", time.Since(mark))
+	return errors.Wrap(postgres.BulkDeleteRuns(r.db, request), "BPTXMReaper#ReapJobRuns failed")
 }

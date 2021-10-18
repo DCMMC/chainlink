@@ -7,11 +7,12 @@ import (
 	"path"
 
 	"github.com/pkg/errors"
+	uuid "github.com/satori/go.uuid"
 	"go.uber.org/multierr"
 	"gorm.io/gorm"
 
-	"github.com/smartcontractkit/chainlink/core/bridges"
 	"github.com/smartcontractkit/chainlink/core/logger"
+	"github.com/smartcontractkit/chainlink/core/store/models"
 )
 
 //
@@ -28,6 +29,7 @@ type BridgeTask struct {
 
 	db     *gorm.DB
 	config Config
+	id     uuid.UUID
 }
 
 var _ Task = (*BridgeTask)(nil)
@@ -38,10 +40,12 @@ func (t *BridgeTask) Type() TaskType {
 	return TaskTypeBridge
 }
 
-func (t *BridgeTask) Run(ctx context.Context, vars Vars, inputs []Result) (result Result, runInfo RunInfo) {
+var ErrPending = errors.New("pending")
+
+func (t *BridgeTask) Run(ctx context.Context, vars Vars, inputs []Result) Result {
 	inputValues, err := CheckInputs(inputs, -1, -1, 0)
 	if err != nil {
-		return Result{Error: errors.Wrap(err, "task inputs")}, runInfo
+		return Result{Error: errors.Wrap(err, "task inputs")}
 	}
 
 	var (
@@ -55,12 +59,12 @@ func (t *BridgeTask) Run(ctx context.Context, vars Vars, inputs []Result) (resul
 		errors.Wrap(ResolveParam(&includeInputAtKey, From(t.IncludeInputAtKey)), "includeInputAtKey"),
 	)
 	if err != nil {
-		return Result{Error: err}, runInfo
+		return Result{Error: err}
 	}
 
 	url, err := t.getBridgeURLFromName(name)
 	if err != nil {
-		return Result{Error: err}, runInfo
+		return Result{Error: err}
 	}
 
 	var metaMap MapParam
@@ -77,7 +81,7 @@ func (t *BridgeTask) Run(ctx context.Context, vars Vars, inputs []Result) (resul
 		)
 	}
 
-	requestData = withRunInfo(requestData, metaMap)
+	requestData = withMeta(requestData, metaMap)
 	if t.IncludeInputAtKey != "" {
 		if len(inputValues) > 0 {
 			requestData[string(includeInputAtKey)] = inputValues[0]
@@ -87,7 +91,7 @@ func (t *BridgeTask) Run(ctx context.Context, vars Vars, inputs []Result) (resul
 	if t.Async == "true" {
 		responseURL := t.config.BridgeResponseURL()
 		if *responseURL != *zeroURL {
-			responseURL.Path = path.Join(responseURL.Path, "/v2/resume/", t.uuid.String())
+			responseURL.Path = path.Join(responseURL.Path, "/v2/resume/", t.id.String())
 		}
 		requestData["responseURL"] = responseURL.String()
 	}
@@ -98,29 +102,29 @@ func (t *BridgeTask) Run(ctx context.Context, vars Vars, inputs []Result) (resul
 
 	requestDataJSON, err := json.Marshal(requestData)
 	if err != nil {
-		return Result{Error: err}, runInfo
+		return Result{Error: err}
 	}
 	logger.Debugw("Bridge task: sending request",
 		"requestData", string(requestDataJSON),
 		"url", url.String(),
 	)
 
-	responseBytes, statusCode, headers, elapsed, err := makeHTTPRequest(ctx, "POST", URLParam(url), requestData, allowUnrestrictedNetworkAccess, t.config)
+	responseBytes, headers, elapsed, err := makeHTTPRequest(ctx, "POST", URLParam(url), requestData, allowUnrestrictedNetworkAccess, t.config)
 	if err != nil {
-		return Result{Error: err}, RunInfo{IsRetryable: isRetryableHTTPError(statusCode, err)}
+		return Result{Error: err}
 	}
 
 	if t.Async == "true" {
 		// Look for a `pending` flag. This check is case-insensitive because http.Header normalizes header names
 		if _, ok := headers["X-Chainlink-Pending"]; ok {
-			return result, pendingRunInfo()
+			return Result{Error: ErrPending}
 		}
 
 		var response struct {
 			Pending bool `json:"pending"`
 		}
 		if err := json.Unmarshal(responseBytes, &response); err == nil && response.Pending {
-			return Result{}, pendingRunInfo()
+			return Result{Error: ErrPending}
 		}
 	}
 
@@ -128,7 +132,7 @@ func (t *BridgeTask) Run(ctx context.Context, vars Vars, inputs []Result) (resul
 	// If a binary response is required we might consider adding an adapter
 	// flag such as  "BinaryMode: true" which passes through raw binary as the
 	// value instead.
-	result = Result{Value: string(responseBytes)}
+	result := Result{Value: string(responseBytes)}
 
 	promHTTPFetchTime.WithLabelValues(t.DotID()).Set(float64(elapsed))
 	promHTTPResponseBodySize.WithLabelValues(t.DotID()).Set(float64(len(responseBytes)))
@@ -138,11 +142,11 @@ func (t *BridgeTask) Run(ctx context.Context, vars Vars, inputs []Result) (resul
 		"url", url.String(),
 		"dotID", t.DotID(),
 	)
-	return result, runInfo
+	return result
 }
 
 func (t BridgeTask) getBridgeURLFromName(name StringParam) (URLParam, error) {
-	var bt bridges.BridgeType
+	var bt models.BridgeType
 	err := t.db.First(&bt, "name = ?", string(name)).Error
 	if err != nil {
 		return URLParam{}, errors.Wrapf(err, "could not find bridge with name '%s'", name)
@@ -150,7 +154,7 @@ func (t BridgeTask) getBridgeURLFromName(name StringParam) (URLParam, error) {
 	return URLParam(bt.URL), nil
 }
 
-func withRunInfo(request MapParam, meta MapParam) MapParam {
+func withMeta(request MapParam, meta MapParam) MapParam {
 	output := make(MapParam)
 	for k, v := range request {
 		output[k] = v

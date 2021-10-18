@@ -3,7 +3,6 @@ package web_test
 import (
 	"bytes"
 	"context"
-	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
@@ -12,19 +11,20 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/pelletier/go-toml"
 	"github.com/smartcontractkit/chainlink/core/testdata/testspecs"
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
-	"gopkg.in/guregu/null.v4"
 
+	"github.com/pelletier/go-toml"
 	"github.com/smartcontractkit/chainlink/core/internal/cltest"
 	"github.com/smartcontractkit/chainlink/core/services/directrequest"
 	"github.com/smartcontractkit/chainlink/core/services/job"
 	"github.com/smartcontractkit/chainlink/core/services/keystore/keys/ethkey"
 	"github.com/smartcontractkit/chainlink/core/services/keystore/keys/p2pkey"
+	"github.com/smartcontractkit/chainlink/core/store/models"
 	"github.com/smartcontractkit/chainlink/core/web"
 	"github.com/smartcontractkit/chainlink/core/web/presenters"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+	"gopkg.in/guregu/null.v4"
 )
 
 func TestJobsController_Create_ValidationFailure_OffchainReportingSpec(t *testing.T) {
@@ -32,33 +32,31 @@ func TestJobsController_Create_ValidationFailure_OffchainReportingSpec(t *testin
 		contractAddress = cltest.NewEIP55Address()
 	)
 
-	randomBytes := cltest.Random32Byte()
-
 	var tt = []struct {
 		name        string
 		pid         p2pkey.PeerID
-		kb          string
+		kb          models.Sha256Hash
 		taExists    bool
 		expectedErr error
 	}{
 		{
 			name:        "invalid keybundle",
 			pid:         p2pkey.PeerID(cltest.DefaultP2PPeerID),
-			kb:          hex.EncodeToString(randomBytes[:]),
+			kb:          models.Sha256Hash(cltest.Random32Byte()),
 			taExists:    true,
 			expectedErr: job.ErrNoSuchKeyBundle,
 		},
 		{
 			name:        "invalid peerID",
 			pid:         p2pkey.PeerID(cltest.NonExistentP2PPeerID),
-			kb:          cltest.DefaultOCRKeyBundleID,
+			kb:          cltest.DefaultOCRKeyBundleIDSha256,
 			taExists:    true,
 			expectedErr: job.ErrNoSuchPeerID,
 		},
 		{
 			name:        "invalid transmitter address",
 			pid:         p2pkey.PeerID(cltest.DefaultP2PPeerID),
-			kb:          cltest.DefaultOCRKeyBundleID,
+			kb:          cltest.DefaultOCRKeyBundleIDSha256,
 			taExists:    false,
 			expectedErr: job.ErrNoSuchTransmitterAddress,
 		},
@@ -69,14 +67,11 @@ func TestJobsController_Create_ValidationFailure_OffchainReportingSpec(t *testin
 
 			var address ethkey.EIP55Address
 			if tc.taExists {
-				key, _ := cltest.MustInsertRandomKey(t, ta.KeyStore.Eth())
+				key := cltest.MustInsertRandomKey(t, ta.Store.DB)
 				address = key.Address
 			} else {
 				address = cltest.NewEIP55Address()
 			}
-
-			ta.KeyStore.P2P().Add(cltest.DefaultP2PKey)
-			ta.KeyStore.OCR().Add(cltest.DefaultOCRKey)
 
 			sp := cltest.MinimalOCRNonBootstrapSpec(contractAddress, address, tc.pid, tc.kb)
 			body, _ := json.Marshal(web.CreateJobRequest{
@@ -94,9 +89,7 @@ func TestJobsController_Create_ValidationFailure_OffchainReportingSpec(t *testin
 
 func TestJobController_Create_HappyPath(t *testing.T) {
 	app, client := setupJobsControllerTests(t)
-	app.KeyStore.OCR().Add(cltest.DefaultOCRKey)
-	app.KeyStore.P2P().Add(cltest.DefaultP2PKey)
-	pks, err := app.KeyStore.VRF().GetAll()
+	pks, err := app.KeyStore.VRF().ListKeys()
 	require.NoError(t, err)
 	require.Len(t, pks, 1)
 	var tt = []struct {
@@ -113,7 +106,7 @@ func TestJobController_Create_HappyPath(t *testing.T) {
 				require.Equal(t, http.StatusOK, r.StatusCode)
 
 				jb := job.Job{}
-				require.NoError(t, app.GetDB().Preload("OffchainreportingOracleSpec").First(&jb, "type = ?", job.OffchainReporting).Error)
+				require.NoError(t, app.Store.DB.Preload("OffchainreportingOracleSpec").First(&jb, "type = ?", job.OffchainReporting).Error)
 
 				resource := presenters.JobResource{}
 				err := web.ParseJSONAPIResponse(cltest.ParseResponseBody(t, r), &resource)
@@ -137,15 +130,12 @@ func TestJobController_Create_HappyPath(t *testing.T) {
 		},
 		{
 			name: "keeper",
-			toml: testspecs.GenerateKeeperSpec(testspecs.KeeperSpecParams{
-				ContractAddress: "0x9E40733cC9df84636505f4e6Db28DCa0dC5D1bba",
-				FromAddress:     "0xa8037A20989AFcBC51798de9762b351D63ff462e",
-			}).Toml(),
+			toml: testspecs.KeeperSpec,
 			assertion: func(t *testing.T, r *http.Response) {
 				require.Equal(t, http.StatusOK, r.StatusCode)
 
 				jb := job.Job{}
-				require.NoError(t, app.GetDB().Preload("KeeperSpec").First(&jb, "type = ?", job.Keeper).Error)
+				require.NoError(t, app.Store.DB.Preload("KeeperSpec").First(&jb, "type = ?", job.Keeper).Error)
 
 				resource := presenters.JobResource{}
 				b := cltest.ParseResponseBody(t, r)
@@ -169,7 +159,7 @@ func TestJobController_Create_HappyPath(t *testing.T) {
 			assertion: func(t *testing.T, r *http.Response) {
 				require.Equal(t, http.StatusOK, r.StatusCode)
 				jb := job.Job{}
-				require.NoError(t, app.GetDB().Preload("CronSpec").First(&jb, "type = ?", job.Cron).Error)
+				require.NoError(t, app.Store.DB.Preload("CronSpec").First(&jb, "type = ?", job.Cron).Error)
 				resource := presenters.JobResource{}
 				err := web.ParseJSONAPIResponse(cltest.ParseResponseBody(t, r), &resource)
 				assert.NoError(t, err)
@@ -183,7 +173,7 @@ func TestJobController_Create_HappyPath(t *testing.T) {
 			assertion: func(t *testing.T, r *http.Response) {
 				require.Equal(t, http.StatusOK, r.StatusCode)
 				jb := job.Job{}
-				require.NoError(t, app.GetDB().Preload("DirectRequestSpec").First(&jb, "type = ? AND external_job_id = '123e4567-e89b-12d3-a456-426655440004'", job.DirectRequest).Error)
+				require.NoError(t, app.Store.DB.Preload("DirectRequestSpec").First(&jb, "type = ? AND external_job_id = '123e4567-e89b-12d3-a456-426655440004'", job.DirectRequest).Error)
 				resource := presenters.JobResource{}
 				err := web.ParseJSONAPIResponse(cltest.ParseResponseBody(t, r), &resource)
 				assert.NoError(t, err)
@@ -200,7 +190,7 @@ func TestJobController_Create_HappyPath(t *testing.T) {
 			assertion: func(t *testing.T, r *http.Response) {
 				require.Equal(t, http.StatusOK, r.StatusCode)
 				jb := job.Job{}
-				require.NoError(t, app.GetDB().Preload("DirectRequestSpec").First(&jb, "type = ? AND external_job_id = '123e4567-e89b-12d3-a456-426655440014'", job.DirectRequest).Error)
+				require.NoError(t, app.Store.DB.Preload("DirectRequestSpec").First(&jb, "type = ? AND external_job_id = '123e4567-e89b-12d3-a456-426655440014'", job.DirectRequest).Error)
 				resource := presenters.JobResource{}
 				err := web.ParseJSONAPIResponse(cltest.ParseResponseBody(t, r), &resource)
 				assert.NoError(t, err)
@@ -220,7 +210,7 @@ func TestJobController_Create_HappyPath(t *testing.T) {
 			assertion: func(t *testing.T, r *http.Response) {
 				require.Equal(t, http.StatusOK, r.StatusCode)
 				jb := job.Job{}
-				require.NoError(t, app.GetDB().Preload("FluxMonitorSpec").First(&jb, "type = ?", job.FluxMonitor).Error)
+				require.NoError(t, app.Store.DB.Preload("FluxMonitorSpec").First(&jb, "type = ?", job.FluxMonitor).Error)
 				resource := presenters.JobResource{}
 				err := web.ParseJSONAPIResponse(cltest.ParseResponseBody(t, r), &resource)
 				assert.NoError(t, err)
@@ -235,11 +225,11 @@ func TestJobController_Create_HappyPath(t *testing.T) {
 		},
 		{
 			name: "vrf",
-			toml: testspecs.GenerateVRFSpec(testspecs.VRFSpecParams{PublicKey: pks[0].PublicKey.String()}).Toml(),
+			toml: testspecs.GenerateVRFSpec(testspecs.VRFSpecParams{PublicKey: pks[0].String()}).Toml(),
 			assertion: func(t *testing.T, r *http.Response) {
 				require.Equal(t, http.StatusOK, r.StatusCode)
 				jb := job.Job{}
-				require.NoError(t, app.GetDB().Preload("VRFSpec").First(&jb, "type = ?", job.VRF).Error)
+				require.NoError(t, app.Store.DB.Preload("VRFSpec").First(&jb, "type = ?", job.VRF).Error)
 				resp := cltest.ParseResponseBody(t, r)
 				resource := presenters.JobResource{}
 				err := web.ParseJSONAPIResponse(resp, &resource)
@@ -267,13 +257,18 @@ func TestJobController_Create_HappyPath(t *testing.T) {
 }
 
 func TestJobsController_Create_WebhookSpec(t *testing.T) {
-	app := cltest.NewApplicationEVMDisabled(t)
+	ethClient, _, assertMocksCalled := cltest.NewEthMocksWithStartupAssertions(t)
+	t.Cleanup(assertMocksCalled)
+	app, cleanup := cltest.NewApplicationWithKey(t,
+		ethClient,
+	)
+	t.Cleanup(cleanup)
 	require.NoError(t, app.Start())
 
 	_, bridge := cltest.NewBridgeType(t, "fetch_bridge", "http://foo.bar")
-	require.NoError(t, app.GetDB().Create(bridge).Error)
+	require.NoError(t, app.Store.DB.Create(bridge).Error)
 	_, bridge = cltest.NewBridgeType(t, "submit_bridge", "http://foo.bar")
-	require.NoError(t, app.GetDB().Create(bridge).Error)
+	require.NoError(t, app.Store.DB.Create(bridge).Error)
 
 	client := app.NewHTTPClient()
 
@@ -286,30 +281,12 @@ func TestJobsController_Create_WebhookSpec(t *testing.T) {
 	require.Equal(t, http.StatusOK, response.StatusCode)
 
 	jb := job.Job{}
-	require.NoError(t, app.GetDB().Preload("WebhookSpec").First(&jb).Error)
+	require.NoError(t, app.Store.DB.Preload("WebhookSpec").First(&jb).Error)
 
 	resource := presenters.JobResource{}
 	err := web.ParseJSONAPIResponse(cltest.ParseResponseBody(t, response), &resource)
 	assert.NoError(t, err)
 	assert.NotNil(t, resource.PipelineSpec.DotDAGSource)
-}
-
-func TestJobsController_FailToCreate_EmptyJsonAttribute(t *testing.T) {
-	app := cltest.NewApplicationEVMDisabled(t)
-	require.NoError(t, app.Start())
-
-	client := app.NewHTTPClient()
-
-	tomlBytes := cltest.MustReadFile(t, "../testdata/tomlspecs/webhook-job-spec-with-empty-json.toml")
-	body, _ := json.Marshal(web.CreateJobRequest{
-		TOML: string(tomlBytes),
-	})
-	response, cleanup := client.Post("/v2/jobs", bytes.NewReader(body))
-	defer cleanup()
-
-	b, err := ioutil.ReadAll(response.Body)
-	require.NoError(t, err)
-	require.Contains(t, string(b), "syntax is not supported. Please use \\\"{}\\\" instead")
 }
 
 func TestJobsController_Index_HappyPath(t *testing.T) {
@@ -342,31 +319,11 @@ func TestJobsController_Show_HappyPath(t *testing.T) {
 
 	runOCRJobSpecAssertions(t, ocrJobSpecFromFile, ocrJob)
 
-	response, cleanup = client.Get("/v2/jobs/" + ocrJobSpecFromFile.ExternalJobID.String())
-	t.Cleanup(cleanup)
-	cltest.AssertServerResponse(t, response, http.StatusOK)
-
-	ocrJob = presenters.JobResource{}
-	err = web.ParseJSONAPIResponse(cltest.ParseResponseBody(t, response), &ocrJob)
-	assert.NoError(t, err)
-
-	runOCRJobSpecAssertions(t, ocrJobSpecFromFile, ocrJob)
-
 	response, cleanup = client.Get("/v2/jobs/" + fmt.Sprintf("%v", jobID2))
 	t.Cleanup(cleanup)
 	cltest.AssertServerResponse(t, response, http.StatusOK)
 
 	ereJob := presenters.JobResource{}
-	err = web.ParseJSONAPIResponse(cltest.ParseResponseBody(t, response), &ereJob)
-	assert.NoError(t, err)
-
-	runDirectRequestJobSpecAssertions(t, ereJobSpecFromFile, ereJob)
-
-	response, cleanup = client.Get("/v2/jobs/" + ereJobSpecFromFile.ExternalJobID.String())
-	t.Cleanup(cleanup)
-	cltest.AssertServerResponse(t, response, http.StatusOK)
-
-	ereJob = presenters.JobResource{}
 	err = web.ParseJSONAPIResponse(cltest.ParseResponseBody(t, response), &ereJob)
 	assert.NoError(t, err)
 
@@ -423,31 +380,33 @@ func runDirectRequestJobSpecAssertions(t *testing.T, ereJobSpecFromFile job.Job,
 }
 
 func setupJobsControllerTests(t *testing.T) (*cltest.TestApplication, cltest.HTTPClientCleaner) {
-	app := cltest.NewApplicationWithKey(t)
+	app, cleanup := cltest.NewApplicationWithKey(t)
+	t.Cleanup(cleanup)
 	require.NoError(t, app.Start())
 
 	_, bridge := cltest.NewBridgeType(t, "voter_turnout", "http://blah.com")
-	require.NoError(t, app.GetDB().Create(bridge).Error)
+	require.NoError(t, app.Store.DB.Create(bridge).Error)
 	_, bridge2 := cltest.NewBridgeType(t, "election_winner", "http://blah.com")
-	require.NoError(t, app.GetDB().Create(bridge2).Error)
+	require.NoError(t, app.Store.DB.Create(bridge2).Error)
 	client := app.NewHTTPClient()
 	vrfKeyStore := app.GetKeyStore().VRF()
-	_, err := vrfKeyStore.Create()
+	vrfKeyStore.Unlock(cltest.Password)
+	_, err := vrfKeyStore.CreateKey()
 	require.NoError(t, err)
 	return app, client
 }
 
 func setupJobSpecsControllerTestsWithJobs(t *testing.T) (*cltest.TestApplication, cltest.HTTPClientCleaner, job.Job, int32, job.Job, int32) {
-	app := cltest.NewApplicationWithKey(t)
+	t.Parallel()
 
-	require.NoError(t, app.KeyStore.OCR().Add(cltest.DefaultOCRKey))
-	require.NoError(t, app.KeyStore.P2P().Add(cltest.DefaultP2PKey))
+	app, cleanup := cltest.NewApplicationWithKey(t)
+	t.Cleanup(cleanup)
 	require.NoError(t, app.Start())
 
 	_, bridge := cltest.NewBridgeType(t, "voter_turnout", "http://blah.com")
-	require.NoError(t, app.GetDB().Create(bridge).Error)
+	require.NoError(t, app.Store.DB.Create(bridge).Error)
 	_, bridge2 := cltest.NewBridgeType(t, "election_winner", "http://blah.com")
-	require.NoError(t, app.GetDB().Create(bridge2).Error)
+	require.NoError(t, app.Store.DB.Create(bridge2).Error)
 
 	client := app.NewHTTPClient()
 

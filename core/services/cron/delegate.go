@@ -3,22 +3,19 @@ package cron
 import (
 	"github.com/pkg/errors"
 
-	"github.com/smartcontractkit/chainlink/core/logger"
 	"github.com/smartcontractkit/chainlink/core/services/job"
 	"github.com/smartcontractkit/chainlink/core/services/pipeline"
 )
 
 type Delegate struct {
 	pipelineRunner pipeline.Runner
-	lggr           logger.Logger
 }
 
 var _ job.Delegate = (*Delegate)(nil)
 
-func NewDelegate(pipelineRunner pipeline.Runner, lggr logger.Logger) *Delegate {
+func NewDelegate(pipelineRunner pipeline.Runner) *Delegate {
 	return &Delegate{
 		pipelineRunner: pipelineRunner,
-		lggr:           lggr,
 	}
 }
 
@@ -39,7 +36,7 @@ func (d *Delegate) ServicesForSpec(spec job.Job) (services []job.Service, err er
 		return nil, errors.Errorf("services.Delegate expects a *jobSpec.CronSpec to be present, got %v", spec)
 	}
 
-	cron, err := NewCronFromJobSpec(spec, d.pipelineRunner, d.lggr)
+	cron, err := NewCronFromJobSpec(spec, d.pipelineRunner)
 	if err != nil {
 		return nil, err
 	}

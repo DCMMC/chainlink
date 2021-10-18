@@ -10,7 +10,6 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promauto"
 	"github.com/smartcontractkit/chainlink/core/logger"
-	"github.com/smartcontractkit/chainlink/core/utils"
 )
 
 //
@@ -48,10 +47,10 @@ func (t *HTTPTask) Type() TaskType {
 	return TaskTypeHTTP
 }
 
-func (t *HTTPTask) Run(ctx context.Context, vars Vars, inputs []Result) (result Result, runInfo RunInfo) {
+func (t *HTTPTask) Run(ctx context.Context, vars Vars, inputs []Result) Result {
 	_, err := CheckInputs(inputs, -1, -1, 0)
 	if err != nil {
-		return Result{Error: errors.Wrap(err, "task inputs")}, runInfo
+		return Result{Error: errors.Wrap(err, "task inputs")}
 	}
 
 	var (
@@ -67,12 +66,12 @@ func (t *HTTPTask) Run(ctx context.Context, vars Vars, inputs []Result) (result 
 		errors.Wrap(ResolveParam(&allowUnrestrictedNetworkAccess, From(NonemptyString(t.AllowUnrestrictedNetworkAccess), !variableRegexp.MatchString(t.URL))), "allowUnrestrictedNetworkAccess"),
 	)
 	if err != nil {
-		return Result{Error: err}, runInfo
+		return Result{Error: err}
 	}
 
 	requestDataJSON, err := json.Marshal(requestData)
 	if err != nil {
-		return Result{Error: err}, runInfo
+		return Result{Error: err}
 	}
 	logger.Debugw("HTTP task: sending request",
 		"requestData", string(requestDataJSON),
@@ -81,12 +80,9 @@ func (t *HTTPTask) Run(ctx context.Context, vars Vars, inputs []Result) (result 
 		"allowUnrestrictedNetworkAccess", allowUnrestrictedNetworkAccess,
 	)
 
-	responseBytes, statusCode, _, elapsed, err := makeHTTPRequest(ctx, method, url, requestData, allowUnrestrictedNetworkAccess, t.config)
+	responseBytes, _, elapsed, err := makeHTTPRequest(ctx, method, url, requestData, allowUnrestrictedNetworkAccess, t.config)
 	if err != nil {
-		if errors.Cause(err) == utils.ErrDisallowedIP {
-			err = errors.Wrap(err, "connections to local resources are disabled by default, if you are sure this is safe, you can enable on a per-task basis by setting allowUnrestrictedNetworkAccess=true in the pipeline task spec")
-		}
-		return Result{Error: err}, RunInfo{IsRetryable: isRetryableHTTPError(statusCode, err)}
+		return Result{Error: err}
 	}
 
 	logger.Debugw("HTTP task got response",
@@ -102,5 +98,5 @@ func (t *HTTPTask) Run(ctx context.Context, vars Vars, inputs []Result) (result 
 	// If a binary response is required we might consider adding an adapter
 	// flag such as  "BinaryMode: true" which passes through raw binary as the
 	// value instead.
-	return Result{Value: string(responseBytes)}, runInfo
+	return Result{Value: string(responseBytes)}
 }

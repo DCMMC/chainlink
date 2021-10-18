@@ -2,21 +2,22 @@ package web
 
 import (
 	"context"
-	"encoding/json"
+	"errors"
 	"io/ioutil"
 	"net/http"
 	"strconv"
 
-	"github.com/gin-gonic/gin"
-	"github.com/pkg/errors"
+	"github.com/smartcontractkit/chainlink/core/web/presenters"
+
 	uuid "github.com/satori/go.uuid"
 
+	"github.com/gin-gonic/gin"
+
+	"github.com/smartcontractkit/chainlink/core/logger"
 	"github.com/smartcontractkit/chainlink/core/services/chainlink"
 	"github.com/smartcontractkit/chainlink/core/services/job"
 	"github.com/smartcontractkit/chainlink/core/services/pipeline"
-	"github.com/smartcontractkit/chainlink/core/services/postgres"
 	"github.com/smartcontractkit/chainlink/core/services/webhook"
-	"github.com/smartcontractkit/chainlink/core/web/presenters"
 )
 
 // PipelineRunsController manages V2 job run requests.
@@ -57,8 +58,7 @@ func (prc *PipelineRunsController) Index(c *gin.Context, size, page, offset int)
 		return
 	}
 
-	res := presenters.NewPipelineRunResources(pipelineRuns, prc.App.GetLogger())
-	paginatedResponse(c, "pipelineRun", size, page, res, count, err)
+	paginatedResponse(c, "pipelineRun", size, page, presenters.NewPipelineRunResources(pipelineRuns), count, err)
 }
 
 // Show returns a specified pipeline run.
@@ -78,8 +78,7 @@ func (prc *PipelineRunsController) Show(c *gin.Context) {
 		return
 	}
 
-	res := presenters.NewPipelineRunResource(pipelineRun, prc.App.GetLogger())
-	jsonAPIResponse(c, res, "pipelineRun")
+	jsonAPIResponse(c, presenters.NewPipelineRunResource(pipelineRun), "pipelineRun")
 }
 
 // Create triggers a pipeline run for a job.
@@ -92,8 +91,7 @@ func (prc *PipelineRunsController) Create(c *gin.Context) {
 			jsonAPIError(c, http.StatusInternalServerError, err)
 			return
 		}
-		res := presenters.NewPipelineRunResource(pipelineRun, prc.App.GetLogger())
-		jsonAPIResponse(c, res, "pipelineRun")
+		jsonAPIResponse(c, presenters.NewPipelineRunResource(pipelineRun), "pipelineRun")
 	}
 
 	bodyBytes, err := ioutil.ReadAll(c.Request.Body)
@@ -105,7 +103,7 @@ func (prc *PipelineRunsController) Create(c *gin.Context) {
 
 	user, isUser := authenticatedUser(c)
 	ei, _ := authenticatedEI(c)
-	authorizer := webhook.NewAuthorizer(postgres.UnwrapGormDB(prc.App.GetDB()).DB, user, ei)
+	authorizer := webhook.NewAuthorizer(prc.App.GetStore().DB, user, ei)
 
 	// Is it a UUID? Then process it as a webhook job
 	jobUUID, err := uuid.FromString(idStr)
@@ -116,7 +114,7 @@ func (prc *PipelineRunsController) Create(c *gin.Context) {
 			return
 		}
 		if canRun {
-			jobRunID, err3 := prc.App.RunWebhookJobV2(c.Request.Context(), jobUUID, string(bodyBytes), pipeline.JSONSerializable{})
+			jobRunID, err3 := prc.App.RunWebhookJobV2(c.Request.Context(), jobUUID, string(bodyBytes), pipeline.JSONSerializable{Null: true})
 			if errors.Is(err3, webhook.ErrJobNotExists) {
 				jsonAPIError(c, http.StatusNotFound, err3)
 				return
@@ -126,7 +124,7 @@ func (prc *PipelineRunsController) Create(c *gin.Context) {
 			}
 			respondWithPipelineRun(jobRunID)
 		} else {
-			jsonAPIError(c, http.StatusUnauthorized, errors.Errorf("external initiator %s is not allowed to run job %s", ei.Name, jobUUID))
+			jsonAPIError(c, http.StatusUnauthorized, err2)
 		}
 		return
 	}
@@ -161,22 +159,32 @@ func (prc *PipelineRunsController) Resume(c *gin.Context) {
 		return
 	}
 
-	rr := pipeline.ResumeRequest{}
-	decoder := json.NewDecoder(c.Request.Body)
-	err = errors.Wrap(decoder.Decode(&rr), "failed to unmarshal JSON body")
-	if err != nil {
-		jsonAPIError(c, http.StatusUnprocessableEntity, err)
-		return
-	}
-	result, err := rr.ToResult()
+	bodyBytes, err := ioutil.ReadAll(c.Request.Body)
 	if err != nil {
 		jsonAPIError(c, http.StatusUnprocessableEntity, err)
 		return
 	}
 
-	if err := prc.App.ResumeJobV2(context.Background(), taskID, result); err != nil {
+	sqlDB, err := prc.App.PipelineORM().DB().DB()
+	if err != nil {
 		jsonAPIError(c, http.StatusInternalServerError, err)
 		return
+	}
+
+	run, start, err := prc.App.PipelineORM().UpdateTaskRunResult(sqlDB, taskID, bodyBytes)
+
+	if err != nil {
+		jsonAPIError(c, http.StatusInternalServerError, err)
+		return
+	}
+
+	if start {
+		// start the runner again
+		go func() {
+			if _, err := prc.App.ResumeJobV2(context.Background(), &run); err != nil {
+				logger.Errorw("/v2/resume:", "err", err)
+			}
+		}()
 	}
 
 	c.Status(http.StatusOK)

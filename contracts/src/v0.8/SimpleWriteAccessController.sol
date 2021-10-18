@@ -12,6 +12,7 @@ import "./interfaces/AccessControllerInterface.sol";
  * SimpleReadAccessController for that.
  */
 contract SimpleWriteAccessController is AccessControllerInterface, ConfirmedOwner {
+
   bool public checkEnabled;
   mapping(address => bool) internal accessList;
 
@@ -20,7 +21,9 @@ contract SimpleWriteAccessController is AccessControllerInterface, ConfirmedOwne
   event CheckAccessEnabled();
   event CheckAccessDisabled();
 
-  constructor() ConfirmedOwner(msg.sender) {
+  constructor() 
+    ConfirmedOwner(msg.sender) 
+  {
     checkEnabled = true;
   }
 
@@ -28,7 +31,16 @@ contract SimpleWriteAccessController is AccessControllerInterface, ConfirmedOwne
    * @notice Returns the access of an address
    * @param _user The address to query
    */
-  function hasAccess(address _user, bytes memory) public view virtual override returns (bool) {
+  function hasAccess(
+    address _user,
+    bytes memory
+  )
+    public
+    view
+    virtual
+    override
+    returns (bool)
+  {
     return accessList[_user] || !checkEnabled;
   }
 
@@ -36,7 +48,10 @@ contract SimpleWriteAccessController is AccessControllerInterface, ConfirmedOwne
    * @notice Adds an address to the access list
    * @param _user The address to add
    */
-  function addAccess(address _user) external onlyOwner {
+  function addAccess(address _user)
+    external
+    onlyOwner()
+  {
     if (!accessList[_user]) {
       accessList[_user] = true;
 
@@ -48,7 +63,10 @@ contract SimpleWriteAccessController is AccessControllerInterface, ConfirmedOwne
    * @notice Removes an address from the access list
    * @param _user The address to remove
    */
-  function removeAccess(address _user) external onlyOwner {
+  function removeAccess(address _user)
+    external
+    onlyOwner()
+  {
     if (accessList[_user]) {
       accessList[_user] = false;
 
@@ -59,7 +77,10 @@ contract SimpleWriteAccessController is AccessControllerInterface, ConfirmedOwne
   /**
    * @notice makes the access check enforced
    */
-  function enableAccessCheck() external onlyOwner {
+  function enableAccessCheck()
+    external
+    onlyOwner()
+  {
     if (!checkEnabled) {
       checkEnabled = true;
 
@@ -70,7 +91,10 @@ contract SimpleWriteAccessController is AccessControllerInterface, ConfirmedOwne
   /**
    * @notice makes the access check unenforced
    */
-  function disableAccessCheck() external onlyOwner {
+  function disableAccessCheck()
+    external
+    onlyOwner()
+  {
     if (checkEnabled) {
       checkEnabled = false;
 

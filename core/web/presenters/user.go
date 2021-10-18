@@ -3,7 +3,7 @@ package presenters
 import (
 	"time"
 
-	"github.com/smartcontractkit/chainlink/core/sessions"
+	"github.com/smartcontractkit/chainlink/core/store/models"
 )
 
 // UserResource represents a User JSONAPI resource.
@@ -21,7 +21,7 @@ func (r UserResource) GetName() string {
 // NewUserResource constructs a new UserResource.
 //
 // A User does not have an ID primary key, so we must use the email
-func NewUserResource(u sessions.User) *UserResource {
+func NewUserResource(u models.User) *UserResource {
 	return &UserResource{
 		JAID:      NewJAID(u.Email),
 		Email:     u.Email,

@@ -7,7 +7,6 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/pkg/errors"
 	"github.com/smartcontractkit/chainlink/core/services/chainlink"
-	"github.com/smartcontractkit/chainlink/core/utils"
 )
 
 type ReplayController struct {
@@ -18,6 +17,7 @@ type ReplayController struct {
 // Example:
 //  "<application>/v2/replay_from_block/:number"
 func (bdc *ReplayController) ReplayFromBlock(c *gin.Context) {
+
 	if c.Param("number") == "" {
 		jsonAPIError(c, http.StatusUnprocessableEntity, errors.New("missing 'number' parameter"))
 		return
@@ -32,35 +32,19 @@ func (bdc *ReplayController) ReplayFromBlock(c *gin.Context) {
 		jsonAPIError(c, http.StatusUnprocessableEntity, errors.Errorf("block number cannot be negative: %v", blockNumber))
 		return
 	}
-
-	chain, err := getChain(c, bdc.App.GetChainSet(), c.Query("evmChainID"))
-	switch err {
-	case ErrInvalidChainID, ErrMultipleChains, ErrMissingChainID:
-		jsonAPIError(c, http.StatusUnprocessableEntity, err)
-		return
-	case nil:
-		break
-	default:
-		jsonAPIError(c, http.StatusInternalServerError, err)
-		return
-	}
-	chainID := chain.ID()
-
-	if err := bdc.App.ReplayFromBlock(chainID, uint64(blockNumber)); err != nil {
+	if err := bdc.App.ReplayFromBlock(uint64(blockNumber)); err != nil {
 		jsonAPIError(c, http.StatusInternalServerError, err)
 		return
 	}
 
 	response := ReplayResponse{
-		Message:    "Replay started",
-		EVMChainID: utils.NewBig(chainID),
+		Message: "Replay started",
 	}
 	jsonAPIResponse(c, &response, "response")
 }
 
 type ReplayResponse struct {
-	Message    string     `json:"message"`
-	EVMChainID *utils.Big `json:"evmChainID"`
+	Message string `json:"message"`
 }
 
 // GetID returns the jsonapi ID.

@@ -22,5 +22,4 @@ module.exports = {
     '\\.(css|less|sass|scss)$': '<rootDir>/__mocks__/styleMock.js',
   },
   transformIgnorePatterns: ['/node_modules/(?!(react-syntax-highlighter)/)'],
-  testEnvironment: 'jsdom',
 }

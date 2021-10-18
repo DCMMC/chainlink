@@ -20,17 +20,12 @@ import JobsShow from 'pages/Jobs/Show'
 import JobsNew from 'pages/Jobs/New'
 import JobRunsIndex from 'pages/JobRuns/Index'
 import JobRunsShowOverview from 'pages/Jobs/Runs/Show'
-import ChainsIndex from 'pages/ChainsIndex/ChainsIndex'
-import ChainsNew from 'pages/Chains/New'
-import ChainShow from 'pages/Chains/Show'
-import NodeShow from 'pages/Nodes/Show'
 import KeysIndex from 'pages/Keys/Index'
 import NotFound from 'pages/NotFound'
 import TransactionsIndex from 'pages/Transactions/Index'
 import TransactionsShow from 'pages/Transactions/Show'
 import { FeedsManagerScreen } from 'pages/FeedsManager/FeedsManagerScreen'
 import { JobProposalScreen } from 'pages/JobProposal/JobProposalScreen'
-import NodesIndex from './pages/NodesIndex/NodesIndex'
 
 const styles = (theme: Theme) => {
   return {
@@ -77,11 +72,10 @@ const Private = ({ classes }: { classes: { content: string } }) => {
               </PrivateRoute>
 
               <PrivateRoute
-                path="/jobs/:jobId/runs/:jobRunId"
+                path="/jobs/:jobSpecId/runs/:jobRunId"
                 component={JobRunsShowOverview}
               />
-
-              <PrivateRoute path="/jobs/:jobId">
+              <PrivateRoute path="/jobs/:jobSpecId">
                 <JobsShow />
               </PrivateRoute>
 
@@ -99,26 +93,6 @@ const Private = ({ classes }: { classes: { content: string } }) => {
                   <JobRunsIndex {...props} pagePath="/runs/page" />
                 )}
               />
-
-              <PrivateRoute exact path="/chains">
-                <ChainsIndex />
-              </PrivateRoute>
-              <PrivateRoute exact path="/chains/new">
-                <ChainsNew />
-              </PrivateRoute>
-
-              <PrivateRoute path="/chains/:chainId">
-                <ChainShow />
-              </PrivateRoute>
-
-              <PrivateRoute exact path="/nodes">
-                <NodesIndex />
-              </PrivateRoute>
-
-              <PrivateRoute path="/nodes/:nodeId">
-                <NodeShow />
-              </PrivateRoute>
-
               <PrivateRoute exact path="/bridges" component={BridgesIndex} />
 
               <PrivateRoute

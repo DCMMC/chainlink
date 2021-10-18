@@ -2,9 +2,23 @@
 pragma solidity ^0.7.0;
 
 interface AuthorizedReceiverInterface {
-  function isAuthorizedSender(address sender) external view returns (bool);
 
-  function getAuthorizedSenders() external returns (address[] memory);
+  function isAuthorizedSender(
+    address sender
+  )
+    external
+    view
+    returns (bool);
 
-  function setAuthorizedSenders(address[] calldata senders) external;
+  function getAuthorizedSenders()
+    external
+    returns (
+      address[] memory
+    );
+
+  function setAuthorizedSenders(
+    address[] calldata senders
+  )
+    external;
+
 }

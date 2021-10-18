@@ -49,8 +49,7 @@ func TestEthTxResource(t *testing.T) {
 			"nonce": "",
 			"sentAt": "",
 			"to": "0x0000000000000000000000000000000000000002",
-			"value": "0.000000000000000001",
-			"evmChainID": "0"
+			"value": "0.000000000000000001"
 		  }
 		}
 	  }
@@ -69,7 +68,7 @@ func TestEthTxResource(t *testing.T) {
 	txa := bulletprooftxmanager.EthTxAttempt{
 		EthTx:                   tx,
 		Hash:                    hash,
-		GasPrice:                gasPrice,
+		GasPrice:                *gasPrice,
 		SignedRawTx:             hexutil.MustDecode("0xcafe"),
 		BroadcastBeforeBlockNum: &broadcastBefore,
 	}
@@ -95,8 +94,7 @@ func TestEthTxResource(t *testing.T) {
 			"nonce": "100",
 			"sentAt": "300",
 			"to": "0x0000000000000000000000000000000000000002",
-			"value": "0.000000000000000001",
-			"evmChainID": "0"
+			"value": "0.000000000000000001"
 		  }
 		}
 	  }

@@ -22,6 +22,12 @@ var (
 	minBackupFrequency = time.Minute
 
 	excludedDataFromTables = []string{
+		"job_runs",
+		"task_runs",
+		"eth_task_run_txes",
+		"run_requests",
+		"run_results",
+		"sync_events",
 		"pipeline_runs",
 		"pipeline_task_runs",
 	}
@@ -41,7 +47,7 @@ type (
 	}
 
 	databaseBackup struct {
-		logger          logger.Logger
+		logger          *logger.Logger
 		databaseURL     url.URL
 		mode            config.DatabaseBackupMode
 		frequency       time.Duration
@@ -60,7 +66,7 @@ type (
 	}
 )
 
-func NewDatabaseBackup(config Config, logger logger.Logger) DatabaseBackup {
+func NewDatabaseBackup(config Config, logger *logger.Logger) DatabaseBackup {
 	dbUrl := config.DatabaseURL()
 	dbBackupUrl := config.DatabaseBackupURL()
 	if dbBackupUrl != nil {
@@ -138,7 +144,7 @@ func (backup *databaseBackup) runBackup(version string) (*backupResult, error) {
 
 	err := os.MkdirAll(backup.outputParentDir, os.ModePerm)
 	if err != nil {
-		return nil, errors.Wrapf(err, "DatabaseBackup: Failed to create directories on the path: %s", backup.outputParentDir)
+		return nil, errors.Wrap(err, fmt.Sprintf("DatabaseBackup: Failed to create directories on the path: %s", backup.outputParentDir))
 	}
 	tmpFile, err := ioutil.TempFile(backup.outputParentDir, "cl_backup_tmp_")
 	if err != nil {
@@ -185,7 +191,7 @@ func (backup *databaseBackup) runBackup(version string) (*backupResult, error) {
 			pgDumpArguments: args,
 		}
 		if ee, ok := err.(*exec.ExitError); ok {
-			return partialResult, errors.Wrapf(err, "pg_dump failed with output: %s", string(ee.Stderr))
+			return partialResult, errors.Wrap(err, fmt.Sprintf("pg_dump failed with output: %s", string(ee.Stderr)))
 		}
 		return partialResult, errors.Wrap(err, "pg_dump failed")
 	}

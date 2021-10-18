@@ -14,12 +14,12 @@ type Config interface {
 	Dev() bool
 	FeatureOffchainReporting() bool
 	DefaultHTTPTimeout() models.Duration
-	OCRBlockchainTimeout() time.Duration
-	OCRContractConfirmations() uint16
-	OCRContractPollInterval() time.Duration
-	OCRContractSubscribeInterval() time.Duration
+	OCRBlockchainTimeout(override time.Duration) time.Duration
+	OCRContractConfirmations(override uint16) uint16
+	OCRContractPollInterval(override time.Duration) time.Duration
+	OCRContractSubscribeInterval(override time.Duration) time.Duration
 	OCRContractTransmitterTransmitTimeout() time.Duration
 	OCRDatabaseTimeout() time.Duration
-	OCRObservationTimeout() time.Duration
+	OCRObservationTimeout(override time.Duration) time.Duration
 	OCRObservationGracePeriod() time.Duration
 }

@@ -7,7 +7,7 @@ import (
 	"github.com/lib/pq"
 	p2ppeer "github.com/libp2p/go-libp2p-core/peer"
 	"github.com/pkg/errors"
-	ocrnetworking "github.com/smartcontractkit/libocr/networking"
+	ocrnetworking "github.com/DCMMC/libocr/networking"
 	"go.uber.org/multierr"
 )
 
@@ -54,9 +54,6 @@ SELECT remote_peer_id, ann FROM offchainreporting_discoverer_announcements WHERE
 			return nil, multierr.Combine(err, rows.Close())
 		}
 		results[peerID] = ann
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
 	}
 	if err := rows.Close(); err != nil {
 		return nil, errors.WithStack(err)

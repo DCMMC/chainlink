@@ -6,15 +6,14 @@ import (
 	mrand "math/rand"
 	"testing"
 
+	"github.com/smartcontractkit/chainlink/core/utils"
+
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/pkg/errors"
-
-	"github.com/smartcontractkit/chainlink/core/internal/cltest"
-	"github.com/smartcontractkit/chainlink/core/logger"
+	"github.com/smartcontractkit/chainlink/core/internal/mocks"
 	"github.com/smartcontractkit/chainlink/core/null"
-	"github.com/smartcontractkit/chainlink/core/services/eth"
 	"github.com/smartcontractkit/chainlink/core/services/offchainreporting"
-	"github.com/smartcontractkit/chainlink/core/utils"
+	"github.com/smartcontractkit/chainlink/core/store/models"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
@@ -24,11 +23,10 @@ func TestArbitrumBlockTranslator_BinarySearch(t *testing.T) {
 	t.Parallel()
 
 	blocks := generateDeterministicL2Blocks()
-	lggr := logger.TestLogger(t)
 
 	t.Run("returns range of current to nil if target is above current block number", func(t *testing.T) {
-		client := cltest.NewEthClientMock(t)
-		abt := offchainreporting.NewArbitrumBlockTranslator(client, lggr)
+		client := new(mocks.Client)
+		abt := offchainreporting.NewArbitrumBlockTranslator(client)
 		ctx := context.Background()
 
 		var changedInL1Block int64 = 5541
@@ -45,8 +43,8 @@ func TestArbitrumBlockTranslator_BinarySearch(t *testing.T) {
 	})
 
 	t.Run("returns error if changedInL1Block is less than the lowest possible L1 block on the L2 chain", func(t *testing.T) {
-		client := cltest.NewEthClientMock(t)
-		abt := offchainreporting.NewArbitrumBlockTranslator(client, lggr)
+		client := new(mocks.Client)
+		abt := offchainreporting.NewArbitrumBlockTranslator(client)
 		ctx := context.Background()
 
 		var changedInL1Block int64 = 42
@@ -54,7 +52,7 @@ func TestArbitrumBlockTranslator_BinarySearch(t *testing.T) {
 		latestBlock := blocks[1000]
 		client.On("HeadByNumber", ctx, (*big.Int)(nil)).Return(&latestBlock, nil).Once()
 
-		tmp := new(eth.Head)
+		tmp := new(models.Head)
 		client.On("HeadByNumber", ctx, mock.AnythingOfType("*big.Int")).Return(tmp, nil).Run(func(args mock.Arguments) {
 			*tmp = blocks[args[1].(*big.Int).Int64()]
 		})
@@ -67,8 +65,8 @@ func TestArbitrumBlockTranslator_BinarySearch(t *testing.T) {
 	})
 
 	t.Run("returns error if L1 block number does not exist for any range of L2 blocks", func(t *testing.T) {
-		client := cltest.NewEthClientMock(t)
-		abt := offchainreporting.NewArbitrumBlockTranslator(client, lggr)
+		client := new(mocks.Client)
+		abt := offchainreporting.NewArbitrumBlockTranslator(client)
 		ctx := context.Background()
 
 		var changedInL1Block int64 = 5043
@@ -76,7 +74,7 @@ func TestArbitrumBlockTranslator_BinarySearch(t *testing.T) {
 		latestBlock := blocks[1000]
 		client.On("HeadByNumber", ctx, (*big.Int)(nil)).Return(&latestBlock, nil).Once()
 
-		tmp := new(eth.Head)
+		tmp := new(models.Head)
 		client.On("HeadByNumber", ctx, mock.AnythingOfType("*big.Int")).Return(tmp, nil).Run(func(args mock.Arguments) {
 			*tmp = blocks[args[1].(*big.Int).Int64()]
 		})
@@ -89,8 +87,8 @@ func TestArbitrumBlockTranslator_BinarySearch(t *testing.T) {
 	})
 
 	t.Run("returns correct range of L2 blocks that encompasses all possible blocks that might contain the given L1 block number", func(t *testing.T) {
-		client := cltest.NewEthClientMock(t)
-		abt := offchainreporting.NewArbitrumBlockTranslator(client, lggr)
+		client := new(mocks.Client)
+		abt := offchainreporting.NewArbitrumBlockTranslator(client)
 		ctx := context.Background()
 
 		var changedInL1Block int64 = 5042
@@ -98,7 +96,7 @@ func TestArbitrumBlockTranslator_BinarySearch(t *testing.T) {
 		latestBlock := blocks[1000]
 		client.On("HeadByNumber", ctx, (*big.Int)(nil)).Return(&latestBlock, nil).Once()
 
-		tmp := new(eth.Head)
+		tmp := new(models.Head)
 		client.On("HeadByNumber", ctx, mock.AnythingOfType("*big.Int")).Return(tmp, nil).Run(func(args mock.Arguments) {
 			h := blocks[args[1].(*big.Int).Int64()]
 			*tmp = h
@@ -114,8 +112,8 @@ func TestArbitrumBlockTranslator_BinarySearch(t *testing.T) {
 	})
 
 	t.Run("handles edge case where L1 is the smallest possible value", func(t *testing.T) {
-		client := cltest.NewEthClientMock(t)
-		abt := offchainreporting.NewArbitrumBlockTranslator(client, lggr)
+		client := new(mocks.Client)
+		abt := offchainreporting.NewArbitrumBlockTranslator(client)
 		ctx := context.Background()
 
 		var changedInL1Block int64 = 5000
@@ -123,7 +121,7 @@ func TestArbitrumBlockTranslator_BinarySearch(t *testing.T) {
 		latestBlock := blocks[1000]
 		client.On("HeadByNumber", ctx, (*big.Int)(nil)).Return(&latestBlock, nil).Once()
 
-		tmp := new(eth.Head)
+		tmp := new(models.Head)
 		client.On("HeadByNumber", ctx, mock.AnythingOfType("*big.Int")).Return(tmp, nil).Run(func(args mock.Arguments) {
 			h := blocks[args[1].(*big.Int).Int64()]
 			*tmp = h
@@ -139,8 +137,8 @@ func TestArbitrumBlockTranslator_BinarySearch(t *testing.T) {
 	})
 
 	t.Run("leaves upper bound unbounded where L1 is the largest possible value", func(t *testing.T) {
-		client := cltest.NewEthClientMock(t)
-		abt := offchainreporting.NewArbitrumBlockTranslator(client, lggr)
+		client := new(mocks.Client)
+		abt := offchainreporting.NewArbitrumBlockTranslator(client)
 		ctx := context.Background()
 
 		var changedInL1Block int64 = 5540
@@ -148,7 +146,7 @@ func TestArbitrumBlockTranslator_BinarySearch(t *testing.T) {
 		latestBlock := blocks[1000]
 		client.On("HeadByNumber", ctx, (*big.Int)(nil)).Return(&latestBlock, nil).Once()
 
-		tmp := new(eth.Head)
+		tmp := new(models.Head)
 		client.On("HeadByNumber", ctx, mock.AnythingOfType("*big.Int")).Return(tmp, nil).Run(func(args mock.Arguments) {
 			h := blocks[args[1].(*big.Int).Int64()]
 			*tmp = h
@@ -165,8 +163,8 @@ func TestArbitrumBlockTranslator_BinarySearch(t *testing.T) {
 	})
 
 	t.Run("caches duplicate lookups", func(t *testing.T) {
-		client := cltest.NewEthClientMock(t)
-		abt := offchainreporting.NewArbitrumBlockTranslator(client, lggr)
+		client := new(mocks.Client)
+		abt := offchainreporting.NewArbitrumBlockTranslator(client)
 		ctx := context.Background()
 
 		var changedInL1Block int64 = 5042
@@ -175,7 +173,7 @@ func TestArbitrumBlockTranslator_BinarySearch(t *testing.T) {
 		// Latest is never cached
 		client.On("HeadByNumber", ctx, (*big.Int)(nil)).Return(&latestBlock, nil).Once()
 
-		tmp := new(eth.Head)
+		tmp := new(models.Head)
 		client.On("HeadByNumber", ctx, mock.AnythingOfType("*big.Int")).Times(20+18+14).Return(tmp, nil).Run(func(args mock.Arguments) {
 			h := blocks[args[1].(*big.Int).Int64()]
 			*tmp = h
@@ -215,11 +213,9 @@ func TestArbitrumBlockTranslator_BinarySearch(t *testing.T) {
 func TestArbitrumBlockTranslator_NumberToQueryRange(t *testing.T) {
 	t.Parallel()
 
-	lggr := logger.TestLogger(t)
-
 	t.Run("falls back to whole range on error", func(t *testing.T) {
-		client := cltest.NewEthClientMock(t)
-		abt := offchainreporting.NewArbitrumBlockTranslator(client, lggr)
+		client := new(mocks.Client)
+		abt := offchainreporting.NewArbitrumBlockTranslator(client)
 		ctx := context.Background()
 		var changedInL1Block uint64 = 5042
 
@@ -231,8 +227,8 @@ func TestArbitrumBlockTranslator_NumberToQueryRange(t *testing.T) {
 	})
 
 	t.Run("falls back to whole range on missing head", func(t *testing.T) {
-		client := cltest.NewEthClientMock(t)
-		abt := offchainreporting.NewArbitrumBlockTranslator(client, lggr)
+		client := new(mocks.Client)
+		abt := offchainreporting.NewArbitrumBlockTranslator(client)
 		ctx := context.Background()
 		var changedInL1Block uint64 = 5042
 
@@ -244,14 +240,14 @@ func TestArbitrumBlockTranslator_NumberToQueryRange(t *testing.T) {
 	})
 }
 
-func generateDeterministicL2Blocks() (heads []eth.Head) {
+func generateDeterministicL2Blocks() (heads []models.Head) {
 	source := mrand.NewSource(0)
 	deterministicRand := mrand.New(source)
 	l2max := 1000
 	var l1BlockNumber int64 = 5000
 	var parentHash common.Hash
 	for i := 0; i <= l2max; i++ {
-		head := eth.Head{
+		head := models.Head{
 			Number:        int64(i),
 			L1BlockNumber: null.Int64From(l1BlockNumber),
 			Hash:          utils.NewHash(),

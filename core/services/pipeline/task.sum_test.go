@@ -6,7 +6,7 @@ import (
 
 	"github.com/pkg/errors"
 	"github.com/shopspring/decimal"
-	"github.com/stretchr/testify/assert"
+
 	"github.com/stretchr/testify/require"
 
 	"github.com/smartcontractkit/chainlink/core/services/pipeline"
@@ -84,9 +84,7 @@ func TestSumTask(t *testing.T) {
 				BaseTask:      pipeline.NewBaseTask(0, "task", nil, nil, 0),
 				AllowedFaults: test.allowedFaults,
 			}
-			output, runInfo := task.Run(context.Background(), pipeline.NewVarsFrom(nil), test.inputs)
-			assert.False(t, runInfo.IsPending)
-			assert.False(t, runInfo.IsRetryable)
+			output := task.Run(context.Background(), pipeline.NewVarsFrom(nil), test.inputs)
 			if output.Error != nil {
 				require.Equal(t, test.want.Error, errors.Cause(output.Error))
 				require.Nil(t, output.Value)
@@ -118,10 +116,7 @@ func TestSumTask(t *testing.T) {
 				Values:        "$(foo.bar)",
 				AllowedFaults: test.allowedFaults,
 			}
-			output, runInfo := task.Run(context.Background(), vars, nil)
-			assert.False(t, runInfo.IsPending)
-			assert.False(t, runInfo.IsRetryable)
-
+			output := task.Run(context.Background(), vars, nil)
 			if output.Error != nil {
 				require.Equal(t, test.want.Error, errors.Cause(output.Error))
 				require.Nil(t, output.Value)
@@ -167,9 +162,7 @@ func TestSumTask(t *testing.T) {
 				Values:        valuesParam,
 				AllowedFaults: test.allowedFaults,
 			}
-			output, runInfo := task.Run(context.Background(), vars, nil)
-			assert.False(t, runInfo.IsPending)
-			assert.False(t, runInfo.IsRetryable)
+			output := task.Run(context.Background(), vars, nil)
 			if output.Error != nil {
 				require.Equal(t, test.want.Error, errors.Cause(output.Error))
 				require.Nil(t, output.Value)

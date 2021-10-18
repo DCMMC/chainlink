@@ -25,7 +25,7 @@ func (t *MeanTask) Type() TaskType {
 	return TaskTypeMean
 }
 
-func (t *MeanTask) Run(_ context.Context, vars Vars, inputs []Result) (result Result, runInfo RunInfo) {
+func (t *MeanTask) Run(_ context.Context, vars Vars, inputs []Result) (result Result) {
 	var (
 		maybeAllowedFaults MaybeUint64Param
 		maybePrecision     MaybeInt32Param
@@ -40,7 +40,7 @@ func (t *MeanTask) Run(_ context.Context, vars Vars, inputs []Result) (result Re
 		errors.Wrap(ResolveParam(&valuesAndErrs, From(VarExpr(t.Values, vars), JSONWithVarExprs(t.Values, vars, true), Inputs(inputs))), "values"),
 	)
 	if err != nil {
-		return Result{Error: err}, runInfo
+		return Result{Error: err}
 	}
 
 	if allowed, isSet := maybeAllowedFaults.Uint64(); isSet {
@@ -51,14 +51,14 @@ func (t *MeanTask) Run(_ context.Context, vars Vars, inputs []Result) (result Re
 
 	values, faults := valuesAndErrs.FilterErrors()
 	if faults > allowedFaults {
-		return Result{Error: errors.Wrapf(ErrTooManyErrors, "Number of faulty inputs %v to mean task > number allowed faults %v", faults, allowedFaults)}, runInfo
+		return Result{Error: errors.Wrapf(ErrTooManyErrors, "Number of faulty inputs %v to mean task > number allowed faults %v", faults, allowedFaults)}
 	} else if len(values) == 0 {
-		return Result{Error: errors.Wrap(ErrWrongInputCardinality, "values")}, runInfo
+		return Result{Error: errors.Wrap(ErrWrongInputCardinality, "values")}
 	}
 
 	err = decimalValues.UnmarshalPipelineParam(values)
 	if err != nil {
-		return Result{Error: errors.Wrapf(ErrBadInput, "values: %v", err)}, runInfo
+		return Result{Error: errors.Wrapf(ErrBadInput, "values: %v", err)}
 	}
 
 	total := decimal.NewFromInt(0)
@@ -69,9 +69,9 @@ func (t *MeanTask) Run(_ context.Context, vars Vars, inputs []Result) (result Re
 	numValues := decimal.NewFromInt(int64(len(decimalValues)))
 
 	if precision, isSet := maybePrecision.Int32(); isSet {
-		return Result{Value: total.DivRound(numValues, precision)}, runInfo
+		return Result{Value: total.DivRound(numValues, precision)}
 	}
 	// Note that decimal library defaults to rounding to 16 precision
 	//https://github.com/shopspring/decimal/blob/2568a29459476f824f35433dfbef158d6ad8618c/decimal.go#L44
-	return Result{Value: total.Div(numValues)}, runInfo
+	return Result{Value: total.Div(numValues)}
 }

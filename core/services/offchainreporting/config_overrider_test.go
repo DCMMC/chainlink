@@ -14,9 +14,10 @@ import (
 	"github.com/smartcontractkit/chainlink/core/services/keystore/keys/ethkey"
 	"github.com/smartcontractkit/chainlink/core/services/offchainreporting"
 	"github.com/smartcontractkit/chainlink/core/utils"
-	ocrtypes "github.com/smartcontractkit/libocr/offchainreporting/types"
+	ocrtypes "github.com/DCMMC/libocr/offchainreporting/types"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
+	"go.uber.org/zap/zapcore"
 )
 
 type configOverriderUni struct {
@@ -25,7 +26,7 @@ type configOverriderUni struct {
 }
 
 func newConfigOverriderUni(t *testing.T, pollITicker utils.TickerBase, flagsContract *mocks.Flags) (uni configOverriderUni) {
-	var testLogger = logger.TestLogger(t)
+	var testLogger = logger.CreateTestLogger(zapcore.DebugLevel)
 	contractAddress := cltest.NewEIP55Address()
 
 	flags := &offchainreporting.ContractFlags{FlagsInterface: flagsContract}
@@ -140,7 +141,7 @@ func Test_OCRConfigOverrider(t *testing.T) {
 	})
 
 	t.Run("Errors if flags contract is missing", func(t *testing.T) {
-		var testLogger = logger.TestLogger(t)
+		var testLogger = logger.CreateTestLogger(zapcore.DebugLevel)
 		contractAddress := cltest.NewEIP55Address()
 		flags := &offchainreporting.ContractFlags{FlagsInterface: nil}
 		_, err := offchainreporting.NewConfigOverriderImpl(
@@ -154,7 +155,7 @@ func Test_OCRConfigOverrider(t *testing.T) {
 	})
 
 	t.Run("DeltaC should be stable per address", func(t *testing.T) {
-		var testLogger = logger.TestLogger(t)
+		var testLogger = logger.CreateTestLogger(zapcore.DebugLevel)
 		flagsContract := new(mocks.Flags)
 		flagsContract.Test(t)
 		flagsContract.On("GetFlags", mock.Anything, mock.Anything).
@@ -197,7 +198,7 @@ type FakeTicker struct {
 
 func NewFakeTicker() *FakeTicker {
 	return &FakeTicker{
-		ticks: make(chan time.Time),
+		ticks: make(chan time.Time, 0),
 	}
 }
 
@@ -205,7 +206,7 @@ func (t *FakeTicker) SimulateTick() {
 	t.ticks <- time.Now()
 }
 
-func (t *FakeTicker) Ticks() <-chan time.Time {
+func (t FakeTicker) Ticks() <-chan time.Time {
 	return t.ticks
 }
 

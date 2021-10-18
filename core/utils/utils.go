@@ -17,6 +17,9 @@ import (
 	"sync"
 	"time"
 
+	"github.com/smartcontractkit/chainlink/core/logger"
+	"go.uber.org/atomic"
+
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/core/types"
@@ -27,12 +30,9 @@ import (
 	uuid "github.com/satori/go.uuid"
 	"github.com/shopspring/decimal"
 	"github.com/tevino/abool"
-	"go.uber.org/atomic"
 	"golang.org/x/crypto/bcrypt"
 	"golang.org/x/crypto/sha3"
 	null "gopkg.in/guregu/null.v4"
-
-	"github.com/smartcontractkit/chainlink/core/logger"
 )
 
 const (
@@ -109,7 +109,7 @@ func FormatJSON(v interface{}) ([]byte, error) {
 // NewBytes32ID returns a randomly generated UUID that conforms to
 // Ethereum bytes32.
 func NewBytes32ID() string {
-	return strings.ReplaceAll(uuid.NewV4().String(), "-", "")
+	return strings.Replace(uuid.NewV4().String(), "-", "", -1)
 }
 
 // NewSecret returns a new securely random sequence of n bytes of entropy.  The
@@ -496,8 +496,6 @@ func ToDecimal(input interface{}) (decimal.Decimal, error) {
 		return decimal.NewFromFloat(v), nil
 	case float32:
 		return decimal.NewFromFloat32(v), nil
-	case big.Int:
-		return decimal.NewFromBigInt(&v, 0), nil
 	case *big.Int:
 		return decimal.NewFromBigInt(v, 0), nil
 	case decimal.Decimal:
@@ -523,20 +521,6 @@ func WaitGroupChan(wg *sync.WaitGroup) <-chan struct{} {
 // receives or is closed.
 func ContextFromChan(chStop <-chan struct{}) (context.Context, context.CancelFunc) {
 	ctx, cancel := context.WithCancel(context.Background())
-	go func() {
-		select {
-		case <-chStop:
-			cancel()
-		case <-ctx.Done():
-		}
-	}()
-	return ctx, cancel
-}
-
-// ContextFromChanWithDeadline creates a context with a deadline that finishes when the provided channel
-// receives or is closed.
-func ContextFromChanWithDeadline(chStop <-chan struct{}, timeout time.Duration) (context.Context, context.CancelFunc) {
-	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	go func() {
 		select {
 		case <-chStop:
@@ -803,7 +787,7 @@ func NewPausableTicker(duration time.Duration) PausableTicker {
 }
 
 // Ticks retrieves the ticks from a PausableTicker
-func (t *PausableTicker) Ticks() <-chan time.Time {
+func (t PausableTicker) Ticks() <-chan time.Time {
 	t.mu.RLock()
 	defer t.mu.RUnlock()
 	if t.ticker == nil {
@@ -907,7 +891,7 @@ func NewResettableTimer() ResettableTimer {
 }
 
 // Ticks retrieves the ticks from a ResettableTimer
-func (t *ResettableTimer) Ticks() <-chan time.Time {
+func (t ResettableTimer) Ticks() <-chan time.Time {
 	t.mu.RLock()
 	defer t.mu.RUnlock()
 	if t.timer == nil {
@@ -1058,7 +1042,6 @@ func (once *StartStopOnce) Healthy() error {
 
 // WithJitter adds +/- 10% to a duration
 func WithJitter(d time.Duration) time.Duration {
-	// #nosec
 	jitter := mrand.Intn(int(d) / 5)
 	jitter = jitter - (jitter / 2)
 	return time.Duration(int(d) + jitter)

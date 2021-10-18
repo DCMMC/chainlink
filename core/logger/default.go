@@ -1,6 +1,7 @@
 package logger
 
 import (
+	"errors"
 	"fmt"
 	"log"
 	"os"
@@ -11,8 +12,7 @@ import (
 var (
 	// Default logger for use throughout the project.
 	// All the package-level functions are calling Default.
-	Default     Logger
-	skipDefault Logger // Default.withCallerSkip(1) for helper funcs
+	Default *Logger
 )
 
 func init() {
@@ -25,110 +25,160 @@ func init() {
 		log.Fatalf("failed to register os specific sinks %+v", err)
 	}
 
-	l, err := newZapLogger(zap.NewProductionConfig())
+	zl, err := zap.NewProduction()
 	if err != nil {
 		log.Fatal(err)
 	}
-	InitLogger(l)
+	SetLogger(&Logger{
+		SugaredLogger: zl.Sugar(),
+	})
 }
 
-// InitLogger sets the Default logger to newLogger. Not safe for concurrent use,
-// so must be called from init() or the main goroutine during initialization.
+// SetLogger sets the internal logger to the given input.
 //
-// You probably don't want to use this. Instead, you should fork the
-// logger.Default instance to create a new logger:
-// Eg: logger.Default.Named("<my-service-name>")
-func InitLogger(newLogger Logger) {
+// DEPRECATED this method is deprecated because it leads to race conditions.
+// Instead, you should fork the logger.Default instance to create a new logger
+// for your module.
+// Eg: logger.Default.Named("<my-package-name>")
+func SetLogger(newLogger *Logger) {
 	if Default != nil {
-		defer func(l Logger) {
-			if err := l.Sync(); err != nil {
-				// logger.Sync() will return 'invalid argument' error when closing file
-				log.Fatalf("failed to sync logger %+v", err)
+		defer func() {
+			if err := Default.Sync(); err != nil {
+				if errors.Unwrap(err).Error() != os.ErrInvalid.Error() &&
+					errors.Unwrap(err).Error() != "inappropriate ioctl for device" &&
+					errors.Unwrap(err).Error() != "bad file descriptor" {
+					// logger.Sync() will return 'invalid argument' error when closing file
+					log.Fatalf("failed to sync logger %+v", err)
+				}
 			}
-		}(Default)
+		}()
 	}
 	Default = newLogger
-	skipDefault = Default.withCallerSkip(1)
 }
 
 // Infow logs an info message and any additional given information.
 func Infow(msg string, keysAndValues ...interface{}) {
-	skipDefault.Infow(msg, keysAndValues...)
+	Default.Infow(msg, keysAndValues...)
 }
 
 // Debugw logs a debug message and any additional given information.
 func Debugw(msg string, keysAndValues ...interface{}) {
-	skipDefault.Debugw(msg, keysAndValues...)
+	Default.Debugw(msg, keysAndValues...)
+}
+
+// Tracew is a shim stand-in for when we have real trace-level logging support
+func Tracew(msg string, keysAndValues ...interface{}) {
+	// Zap does not support trace logging just yet
+	Default.Debugw("TRACE: "+msg, keysAndValues...)
 }
 
 // Warnw logs a debug message and any additional given information.
 func Warnw(msg string, keysAndValues ...interface{}) {
-	skipDefault.Warnw(msg, keysAndValues...)
+	Default.Warnw(msg, keysAndValues...)
 }
 
 // Errorw logs an error message, any additional given information, and includes
 // stack trace.
 func Errorw(msg string, keysAndValues ...interface{}) {
-	skipDefault.Errorw(msg, keysAndValues...)
+	Default.Errorw(msg, keysAndValues...)
+}
+
+// Logs and returns a new error
+func NewErrorw(msg string, keysAndValues ...interface{}) error {
+	Default.Errorw(msg, keysAndValues...)
+	return errors.New(msg)
 }
 
 // Infof formats and then logs the message.
 func Infof(format string, values ...interface{}) {
-	skipDefault.Infof(format, values...)
+	Default.Info(fmt.Sprintf(format, values...))
 }
 
 // Debugf formats and then logs the message.
 func Debugf(format string, values ...interface{}) {
-	skipDefault.Debugf(format, values...)
+	Default.Debug(fmt.Sprintf(format, values...))
+}
+
+// Tracef is a shim stand-in for when we have real trace-level logging support
+func Tracef(format string, values ...interface{}) {
+	Default.Debug("TRACE: " + fmt.Sprintf(format, values...))
 }
 
 // Warnf formats and then logs the message as Warn.
 func Warnf(format string, values ...interface{}) {
-	skipDefault.Warnf(format, values...)
+	Default.Warn(fmt.Sprintf(format, values...))
 }
 
 // Panicf formats and then logs the message before panicking.
 func Panicf(format string, values ...interface{}) {
-	skipDefault.Panic(fmt.Sprintf(format, values...))
+	Default.Panic(fmt.Sprintf(format, values...))
+}
+
+// Info logs an info message.
+func Info(args ...interface{}) {
+	Default.Info(args...)
 }
 
 // Debug logs a debug message.
 func Debug(args ...interface{}) {
-	skipDefault.Debug(args...)
+	Default.Debug(args...)
+}
+
+// Trace is a shim stand-in for when we have real trace-level logging support
+func Trace(args ...interface{}) {
+	Default.Debug(append([]interface{}{"TRACE: "}, args...))
 }
 
 // Warn logs a message at the warn level.
 func Warn(args ...interface{}) {
-	skipDefault.Warn(args...)
+	Default.Warn(args...)
 }
 
 // Error logs an error message.
 func Error(args ...interface{}) {
-	skipDefault.Error(args...)
+	Default.Error(args...)
 }
 
-func ErrorIfCalling(f func() error) {
-	skipDefault.ErrorIfCalling(f)
+func WarnIf(err error) {
+	Default.WarnIf(err)
+}
+
+func ErrorIf(err error, optionalMsg ...string) {
+	Default.ErrorIf(err, optionalMsg...)
+}
+
+func ErrorIfCalling(f func() error, optionalMsg ...string) {
+	Default.ErrorIfCalling(f, optionalMsg...)
 }
 
 // Fatal logs a fatal message then exits the application.
 func Fatal(args ...interface{}) {
-	skipDefault.Fatal(args...)
+	Default.Fatal(args...)
 }
 
 // Errorf logs a message at the error level using Sprintf.
 func Errorf(format string, values ...interface{}) {
-	skipDefault.Error(fmt.Sprintf(format, values...))
+	Error(fmt.Sprintf(format, values...))
 }
 
 // Fatalf logs a message at the fatal level using Sprintf.
 func Fatalf(format string, values ...interface{}) {
-	skipDefault.Fatal(fmt.Sprintf(format, values...))
+	Fatal(fmt.Sprintf(format, values...))
 }
 
 // Fatalw logs a message and exits the application
 func Fatalw(msg string, keysAndValues ...interface{}) {
-	skipDefault.Fatalw(msg, keysAndValues...)
+	Default.Fatalw(msg, keysAndValues...)
+}
+
+// Panic logs a panic message then panics.
+func Panic(args ...interface{}) {
+	Default.Panic(args...)
+}
+
+// PanicIf logs the error if present.
+func PanicIf(err error) {
+	Default.PanicIf(err)
 }
 
 // Sync flushes any buffered log entries.

@@ -4,36 +4,19 @@ jobs:
     resource_class: 2xlarge
     machine:
       image: circleci/classic:201808-01
-      docker_layer_caching: true
+      docker_layer_caching: false
     steps:
       - checkout
       - setup-aws-ecr
       - run:
           name: Docker build
-          command: |
-            # If BUILDER is not defined (i.e. the user who submitted the PR is
-            # probably not on the chainlink team) short circuit this step and
-            # succed
-            if [[ -z "$BUILDER" ]]; then
-              exit 0
-            fi
-
-            DOCKER_TAG=circleci BUILDER="${AWS_ECR_URL}/builder" make docker
+          command: DOCKER_TAG=circleci BUILDER="${AWS_ECR_URL}/builder" make docker
       - run:
           name: Docker build non-root
-          command: |
-            if [[ -z "$BUILDER" ]]; then
-              exit 0
-            fi
-
-            DOCKER_TAG=circleci-nonroot CHAINLINK_USER=chainlink make docker
+          command: DOCKER_TAG=circleci-nonroot CHAINLINK_USER=chainlink make docker
       - run:
           name: Docker push, if applicable
           command: |
-            if [[ -z "$BUILDER" ]]; then
-              exit 0
-            fi
-
             tools/ci/push_chainlink "${CIRCLE_BRANCH}" "${CIRCLE_TAG}" "${CIRCLE_SHA1}"
 
 workflows:
@@ -44,7 +27,6 @@ workflows:
           filters:
             tags:
               only: /^v.*/
-
 commands:
   setup-aws-ecr:
     description: 'Install aws cli and login to public and private ECR'
@@ -52,10 +34,6 @@ commands:
       - run:
           name: Install AWS CLI
           command: |
-            if [[ -z "$BUILDER" ]]; then
-              exit 0
-            fi
-
             curl -sSL "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip"
             unzip awscliv2.zip
             sudo ./aws/install
@@ -64,10 +42,6 @@ commands:
       - run:
           name: Docker login for ECR using temporary creds
           command: |
-            if [[ -z "$BUILDER" ]]; then
-              exit 0
-            fi
-
             # Get temporary credentials to access resoures available to specific role
             temporaryCredentials=$(
               aws sts assume-role \

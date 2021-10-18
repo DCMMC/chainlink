@@ -8,21 +8,18 @@ import (
 	gethCommon "github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/pkg/errors"
-	evmconfig "github.com/smartcontractkit/chainlink/core/chains/evm/config"
+	"github.com/smartcontractkit/chainlink/core/chains"
 	"github.com/smartcontractkit/chainlink/core/internal/cltest"
 	"github.com/smartcontractkit/chainlink/core/internal/gethwrappers/generated/offchain_aggregator_wrapper"
 	"github.com/smartcontractkit/chainlink/core/internal/mocks"
-	"github.com/smartcontractkit/chainlink/core/internal/testutils/configtest"
-	"github.com/smartcontractkit/chainlink/core/internal/testutils/evmtest"
-	"github.com/smartcontractkit/chainlink/core/internal/testutils/pgtest"
 	"github.com/smartcontractkit/chainlink/core/logger"
-	"github.com/smartcontractkit/chainlink/core/services/eth"
 	htmocks "github.com/smartcontractkit/chainlink/core/services/headtracker/mocks"
 	logmocks "github.com/smartcontractkit/chainlink/core/services/log/mocks"
 	"github.com/smartcontractkit/chainlink/core/services/offchainreporting"
 	ocrmocks "github.com/smartcontractkit/chainlink/core/services/offchainreporting/mocks"
-	"github.com/smartcontractkit/libocr/gethwrappers/offchainaggregator"
-	ocrtypes "github.com/smartcontractkit/libocr/offchainreporting/types"
+	"github.com/smartcontractkit/chainlink/core/store/models"
+	"github.com/DCMMC/libocr/gethwrappers/offchainaggregator"
+	ocrtypes "github.com/DCMMC/libocr/offchainreporting/types"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
@@ -49,13 +46,13 @@ type contractTrackerUni struct {
 }
 
 func newContractTrackerUni(t *testing.T, opts ...interface{}) (uni contractTrackerUni) {
-	var cfg evmconfig.ChainScopedConfig
+	var chain *chains.Chain
 	var filterer *offchainaggregator.OffchainAggregatorFilterer
 	var contract *offchain_aggregator_wrapper.OffchainAggregator
 	for _, opt := range opts {
 		switch v := opt.(type) {
-		case evmconfig.ChainScopedConfig:
-			cfg = v
+		case *chains.Chain:
+			chain = v
 		case *offchainaggregator.OffchainAggregatorFilterer:
 			filterer = v
 		case *offchain_aggregator_wrapper.OffchainAggregator:
@@ -64,8 +61,8 @@ func newContractTrackerUni(t *testing.T, opts ...interface{}) (uni contractTrack
 			t.Fatalf("unrecognised option type %T", v)
 		}
 	}
-	if cfg == nil {
-		cfg = evmtest.NewChainScopedConfig(t, configtest.NewTestGeneralConfig(t))
+	if chain == nil {
+		chain = chains.EthMainnet
 	}
 	if filterer == nil {
 		filterer = mustNewFilterer(t, cltest.NewAddress())
@@ -76,9 +73,10 @@ func newContractTrackerUni(t *testing.T, opts ...interface{}) (uni contractTrack
 	uni.db = new(ocrmocks.OCRContractTrackerDB)
 	uni.lb = new(logmocks.Broadcaster)
 	uni.hb = new(htmocks.HeadBroadcaster)
-	uni.ec = cltest.NewEthClientMock(t)
+	uni.ec = new(mocks.Client)
 
-	db := pgtest.NewGormDB(t)
+	s, c := cltest.NewStore(t)
+	t.Cleanup(c)
 	uni.tracker = offchainreporting.NewOCRContractTracker(
 		contract,
 		filterer,
@@ -86,10 +84,10 @@ func newContractTrackerUni(t *testing.T, opts ...interface{}) (uni contractTrack
 		uni.ec,
 		uni.lb,
 		42,
-		logger.TestLogger(t),
-		db,
+		*logger.Default,
+		s.DB,
 		uni.db,
-		cfg,
+		chain,
 		uni.hb,
 	)
 
@@ -107,7 +105,7 @@ func Test_OCRContractTracker_LatestBlockHeight(t *testing.T) {
 	t.Parallel()
 
 	t.Run("on L2 chains, always returns 0", func(t *testing.T) {
-		uni := newContractTrackerUni(t, evmtest.ChainOptimismMainnet(t))
+		uni := newContractTrackerUni(t, chains.OptimismMainnet)
 		l, err := uni.tracker.LatestBlockHeight(context.Background())
 		require.NoError(t, err)
 
@@ -116,7 +114,7 @@ func Test_OCRContractTracker_LatestBlockHeight(t *testing.T) {
 
 	t.Run("before first head incoming, looks up on-chain", func(t *testing.T) {
 		uni := newContractTrackerUni(t)
-		uni.ec.On("HeadByNumber", mock.AnythingOfType("*context.cancelCtx"), (*big.Int)(nil)).Return(&eth.Head{Number: 42}, nil)
+		uni.ec.On("HeadByNumber", mock.AnythingOfType("*context.cancelCtx"), (*big.Int)(nil)).Return(&models.Head{Number: 42}, nil)
 
 		l, err := uni.tracker.LatestBlockHeight(context.Background())
 		require.NoError(t, err)
@@ -142,7 +140,7 @@ func Test_OCRContractTracker_LatestBlockHeight(t *testing.T) {
 	t.Run("after first head incoming, uses cached value", func(t *testing.T) {
 		uni := newContractTrackerUni(t)
 
-		uni.tracker.OnNewLongestChain(context.Background(), eth.Head{Number: 42})
+		uni.tracker.OnNewLongestChain(context.Background(), models.Head{Number: 42})
 
 		l, err := uni.tracker.LatestBlockHeight(context.Background())
 		require.NoError(t, err)
@@ -153,7 +151,7 @@ func Test_OCRContractTracker_LatestBlockHeight(t *testing.T) {
 	t.Run("if headbroadcaster has it, uses the given value on start", func(t *testing.T) {
 		uni := newContractTrackerUni(t)
 
-		uni.hb.On("Subscribe", uni.tracker).Return(&eth.Head{Number: 42}, func() {})
+		uni.hb.On("Subscribe", uni.tracker).Return(&models.Head{Number: 42}, func() {})
 		uni.db.On("LoadLatestRoundRequested").Return(offchainaggregator.OffchainAggregatorRoundRequested{}, nil)
 		uni.lb.On("Register", uni.tracker, mock.Anything).Return(func() {})
 

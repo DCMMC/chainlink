@@ -10,8 +10,8 @@ import (
 	gethCommon "github.com/ethereum/go-ethereum/common"
 	"github.com/pkg/errors"
 	"github.com/smartcontractkit/chainlink/core/services/log"
-	"github.com/smartcontractkit/libocr/gethwrappers/offchainaggregator"
-	ocrtypes "github.com/smartcontractkit/libocr/offchainreporting/types"
+	"github.com/DCMMC/libocr/gethwrappers/offchainaggregator"
+	ocrtypes "github.com/DCMMC/libocr/offchainreporting/types"
 )
 
 var (

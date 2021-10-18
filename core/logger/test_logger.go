@@ -8,7 +8,9 @@ import (
 	"net/url"
 	"sync"
 
+	"github.com/fatih/color"
 	"go.uber.org/zap"
+	"go.uber.org/zap/zapcore"
 )
 
 // MemorySink implements zap.Sink by writing all messages to a buffer.
@@ -38,18 +40,13 @@ func (s *MemorySink) String() string {
 	return s.b.String()
 }
 
-func (s *MemorySink) Reset() {
-	s.m.Lock()
-	defer s.m.Unlock()
-	s.b.Reset()
-}
-
-var testMemoryLog MemorySink
+var testMemoryLog *MemorySink
 var createSinkOnce sync.Once
 
 func registerMemorySink() {
+	testMemoryLog = &MemorySink{m: sync.Mutex{}, b: bytes.Buffer{}}
 	if err := zap.RegisterSink("memory", func(*url.URL) (zap.Sink, error) {
-		return PrettyConsole{Sink: &testMemoryLog}, nil
+		return PrettyConsole{Sink: testMemoryLog}, nil
 	}); err != nil {
 		panic(err)
 	}
@@ -57,35 +54,39 @@ func registerMemorySink() {
 
 func MemoryLogTestingOnly() *MemorySink {
 	createSinkOnce.Do(registerMemorySink)
-	return &testMemoryLog
+	return testMemoryLog
 }
 
-// TestLogger creates a logger that directs output to PrettyConsole configured
-// for test output, and to the buffer testMemoryLog. t is optional.
-// Log level is derived from the LOG_LEVEL env var.
-func TestLogger(t T) Logger {
-	l, err := newZapLogger(newTestConfig())
-	if err != nil {
-		if t == nil {
-			log.Fatal(err)
-		}
-		t.Fatal(err)
-	}
-	if t == nil {
-		return l
-	}
-	return l.Named(t.Name())
-}
-
-func newTestConfig() zap.Config {
+// CreateTestLogger creates a logger that directs output to PrettyConsole
+// configured for test output, and to the buffer testMemoryLog.
+func CreateTestLogger(lvl zapcore.Level) *Logger {
 	_ = MemoryLogTestingOnly() // Make sure memory log is created
+	color.NoColor = false
 	config := zap.NewProductionConfig()
-	config.Level.SetLevel(envLvl)
+	config.Level.SetLevel(lvl)
 	config.OutputPaths = []string{"pretty://console", "memory://"}
-	return config
+	zl, err := config.Build(zap.AddCallerSkip(1))
+	if err != nil {
+		log.Fatal(err)
+	}
+	return &Logger{
+		SugaredLogger: zl.Sugar(),
+	}
 }
 
-type T interface {
-	Name() string
-	Fatal(...interface{})
+// CreateMemoryTestLogger creates a logger that only directs output to the
+// buffer testMemoryLog.
+func CreateMemoryTestLogger(lvl zapcore.Level) *Logger {
+	_ = MemoryLogTestingOnly() // Make sure memory log is created
+	color.NoColor = true
+	config := zap.NewProductionConfig()
+	config.Level.SetLevel(lvl)
+	config.OutputPaths = []string{"memory://"}
+	zl, err := config.Build(zap.AddCallerSkip(1))
+	if err != nil {
+		log.Fatal(err)
+	}
+	return &Logger{
+		SugaredLogger: zl.Sugar(),
+	}
 }

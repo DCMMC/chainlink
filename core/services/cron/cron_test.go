@@ -5,17 +5,15 @@ import (
 	"testing"
 	"time"
 
+	uuid "github.com/satori/go.uuid"
+
+	pipelinemocks "github.com/smartcontractkit/chainlink/core/services/pipeline/mocks"
+
 	"github.com/smartcontractkit/chainlink/core/internal/cltest"
-	"github.com/smartcontractkit/chainlink/core/internal/testutils/configtest"
-	"github.com/smartcontractkit/chainlink/core/internal/testutils/evmtest"
-	"github.com/smartcontractkit/chainlink/core/internal/testutils/pgtest"
-	"github.com/smartcontractkit/chainlink/core/logger"
 	"github.com/smartcontractkit/chainlink/core/services/cron"
 	"github.com/smartcontractkit/chainlink/core/services/job"
 	"github.com/smartcontractkit/chainlink/core/services/pipeline"
-	pipelinemocks "github.com/smartcontractkit/chainlink/core/services/pipeline/mocks"
-
-	uuid "github.com/satori/go.uuid"
+	"github.com/smartcontractkit/chainlink/core/services/postgres"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
@@ -23,12 +21,14 @@ import (
 
 func TestCronV2Pipeline(t *testing.T) {
 	runner := new(pipelinemocks.Runner)
-	cfg := configtest.NewTestGeneralConfig(t)
-	db := pgtest.NewGormDB(t)
-	keyStore := cltest.NewKeyStore(t, db)
-	cc := evmtest.NewChainSet(t, evmtest.TestChainOpts{DB: db, GeneralConfig: cfg, Client: cltest.NewEthClientMockWithDefaultChain(t)})
-	orm := pipeline.NewORM(db)
-	jobORM := job.NewORM(db, cc, orm, keyStore, logger.TestLogger(t))
+	config, cleanup := cltest.NewConfig(t)
+	t.Cleanup(cleanup)
+	store, cleanup := cltest.NewStoreWithConfig(t, config)
+	t.Cleanup(cleanup)
+	db := store.DB
+	orm, eventBroadcaster, cleanupPipeline := cltest.NewPipelineORM(t, config, db)
+	t.Cleanup(cleanupPipeline)
+	jobORM := job.NewORM(db, config.Config, orm, eventBroadcaster, &postgres.NullAdvisoryLocker{})
 
 	spec := &job.Job{
 		Type:          job.Cron,
@@ -37,7 +37,7 @@ func TestCronV2Pipeline(t *testing.T) {
 		PipelineSpec:  &pipeline.Spec{},
 		ExternalJobID: uuid.NewV4(),
 	}
-	delegate := cron.NewDelegate(runner, logger.TestLogger(t))
+	delegate := cron.NewDelegate(runner)
 
 	jb, err := jobORM.CreateJob(context.Background(), spec, spec.Pipeline)
 	require.NoError(t, err)
@@ -62,10 +62,10 @@ func TestCronV2Schedule(t *testing.T) {
 	}
 	runner := new(pipelinemocks.Runner)
 
-	runner.On("Run", mock.Anything, mock.AnythingOfType("*pipeline.Run"), mock.Anything, mock.Anything, mock.Anything).
+	runner.On("Run", mock.Anything, mock.AnythingOfType("*pipeline.Run"), mock.Anything, mock.Anything).
 		Return(false, nil).Once()
 
-	service, err := cron.NewCronFromJobSpec(spec, runner, logger.TestLogger(t))
+	service, err := cron.NewCronFromJobSpec(spec, runner)
 	require.NoError(t, err)
 	err = service.Start()
 	require.NoError(t, err)

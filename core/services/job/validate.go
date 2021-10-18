@@ -1,8 +1,6 @@
 package job
 
 import (
-	"strings"
-
 	"github.com/pelletier/go-toml"
 	"github.com/pkg/errors"
 )
@@ -22,7 +20,7 @@ var (
 	}
 )
 
-// ValidateSpec is the common spec validation
+// Common spec validation
 func ValidateSpec(ts string) (Type, error) {
 	var jb Job
 	// Note we can't use:
@@ -47,19 +45,14 @@ func ValidateSpec(ts string) (Type, error) {
 	if _, ok := jobTypes[jb.Type]; !ok {
 		return "", ErrInvalidJobType
 	}
-	if jb.Type.SchemaVersion() != jb.SchemaVersion {
+	if jb.SchemaVersion != 1 {
 		return "", ErrInvalidSchemaVersion
 	}
 	if jb.Type.RequiresPipelineSpec() && (jb.Pipeline.Source == "") {
 		return "", ErrNoPipelineSpec
 	}
-	if jb.Pipeline.RequiresPreInsert() && !jb.Type.SupportsAsync() {
+	if jb.Pipeline.HasAsync() && !jb.Type.SupportsAsync() {
 		return "", errors.Errorf("async=true tasks are not supported for %v", jb.Type)
 	}
-
-	if strings.Contains(ts, "<{}>") {
-		return "", errors.Errorf("'<{}>' syntax is not supported. Please use \"{}\" instead")
-	}
-
 	return jb.Type, nil
 }

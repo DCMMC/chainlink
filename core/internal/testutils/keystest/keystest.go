@@ -17,7 +17,7 @@ func NewKey() (key keystore.Key, err error) {
 		return key, err
 	}
 
-	id, err := uuid.NewRandom()
+	id := uuid.New()
 	if err != nil {
 		return key, errors.Errorf("Could not create random uuid: %v", err)
 	}

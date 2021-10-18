@@ -14,7 +14,7 @@ import (
 // Cron runs a cron jobSpec from a CronSpec
 type Cron struct {
 	cronRunner     *cron.Cron
-	logger         logger.Logger
+	logger         *logger.Logger
 	jobSpec        job.Job
 	pipelineRunner pipeline.Runner
 	chStop         chan struct{}
@@ -24,11 +24,12 @@ type Cron struct {
 func NewCronFromJobSpec(
 	jobSpec job.Job,
 	pipelineRunner pipeline.Runner,
-	logger logger.Logger,
 ) (*Cron, error) {
-	cronLogger := logger.Named("Cron").With(
-		"jobID", jobSpec.ID,
-		"schedule", jobSpec.CronSpec.CronSchedule,
+	cronLogger := logger.CreateLogger(
+		logger.Default.With(
+			"jobID", jobSpec.ID,
+			"schedule", jobSpec.CronSpec.CronSchedule,
+		),
 	)
 
 	return &Cron{
@@ -42,7 +43,7 @@ func NewCronFromJobSpec(
 
 // Start implements the job.Service interface.
 func (cr *Cron) Start() error {
-	cr.logger.Debug("Starting")
+	cr.logger.Debug("Cron: Starting")
 
 	_, err := cr.cronRunner.AddFunc(cr.jobSpec.CronSpec.CronSchedule, cr.runPipeline)
 	if err != nil {
@@ -56,7 +57,7 @@ func (cr *Cron) Start() error {
 // Close implements the job.Service interface. It stops this job from
 // running and cleans up resources.
 func (cr *Cron) Close() error {
-	cr.logger.Debug("Closing")
+	cr.logger.Debug("Cron: Closing")
 	cr.cronRunner.Stop()
 	return nil
 }
@@ -78,7 +79,7 @@ func (cr *Cron) runPipeline() {
 
 	run := pipeline.NewRun(*cr.jobSpec.PipelineSpec, vars)
 
-	_, err := cr.pipelineRunner.Run(ctx, &run, cr.logger, false, nil)
+	_, err := cr.pipelineRunner.Run(ctx, &run, *cr.logger, false)
 	if err != nil {
 		cr.logger.Errorf("Error executing new run for jobSpec ID %v", cr.jobSpec.ID)
 	}

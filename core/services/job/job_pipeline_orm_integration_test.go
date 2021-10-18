@@ -3,20 +3,18 @@ package job_test
 import (
 	"context"
 	"testing"
-	"time"
 
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
-	"gopkg.in/guregu/null.v4"
-	"gorm.io/gorm"
-
-	"github.com/smartcontractkit/chainlink/core/internal/cltest"
-	"github.com/smartcontractkit/chainlink/core/internal/testutils/evmtest"
-	"github.com/smartcontractkit/chainlink/core/internal/testutils/pgtest"
 	"github.com/smartcontractkit/chainlink/core/logger"
+
 	"github.com/smartcontractkit/chainlink/core/services/job"
 	"github.com/smartcontractkit/chainlink/core/services/pipeline"
+
+	"github.com/smartcontractkit/chainlink/core/internal/cltest"
+	"github.com/smartcontractkit/chainlink/core/internal/cltest/heavyweight"
+	"github.com/smartcontractkit/chainlink/core/services/postgres"
 	"github.com/smartcontractkit/chainlink/core/store/models"
+	"github.com/stretchr/testify/require"
+	"gorm.io/gorm"
 )
 
 func clearJobsDb(t *testing.T, db *gorm.DB) {
@@ -44,17 +42,14 @@ func TestPipelineORM_Integration(t *testing.T) {
         answer2 [type=bridge name=election_winner index=1];
     `
 
-	config := cltest.NewTestGeneralConfig(t)
-	db := pgtest.NewGormDB(t)
-	config.SetDB(db)
-	config.Overrides.SetDefaultHTTPTimeout(30 * time.Millisecond)
-	config.Overrides.DefaultMaxHTTPAttempts = null.IntFrom(1)
-	keyStore := cltest.NewKeyStore(t, db)
-	ethKeyStore := keyStore.Eth()
+	config, oldORM, cleanupDB := heavyweight.FullTestORM(t, "pipeline_orm", true, true)
+	config.Set("DEFAULT_HTTP_TIMEOUT", "30ms")
+	config.Set("MAX_HTTP_ATTEMPTS", "1")
+	defer cleanupDB()
+	db := oldORM.DB
 
-	_, transmitterAddress := cltest.MustInsertRandomKey(t, ethKeyStore)
-	keyStore.OCR().Add(cltest.DefaultOCRKey)
-	keyStore.P2P().Add(cltest.DefaultP2PKey)
+	key := cltest.MustInsertRandomKey(t, db)
+	transmitterAddress := key.Address.Address()
 
 	var specID int32
 
@@ -101,8 +96,8 @@ func TestPipelineORM_Integration(t *testing.T) {
 
 	t.Run("creates task DAGs", func(t *testing.T) {
 		clearJobsDb(t, db)
-
-		orm := pipeline.NewORM(db)
+		orm, _, cleanup := cltest.NewPipelineORM(t, config, db)
+		defer cleanup()
 
 		p, err := pipeline.Parse(DotStr)
 		require.NoError(t, err)
@@ -122,11 +117,12 @@ func TestPipelineORM_Integration(t *testing.T) {
 
 	t.Run("creates runs", func(t *testing.T) {
 		clearJobsDb(t, db)
-		orm := pipeline.NewORM(db)
-		cc := evmtest.NewChainSet(t, evmtest.TestChainOpts{Client: cltest.NewEthClientMockWithDefaultChain(t), DB: db, GeneralConfig: config})
-		runner := pipeline.NewRunner(orm, config, cc, nil, nil)
+		orm, eventBroadcaster, cleanup := cltest.NewPipelineORM(t, config, db)
+		defer cleanup()
+		runner := pipeline.NewRunner(orm, config, nil, nil, nil, nil)
 		defer runner.Close()
-		jobORM := job.NewTestORM(t, db, cc, orm, keyStore)
+		jobORM := job.NewORM(db, config.Config, orm, eventBroadcaster, &postgres.NullAdvisoryLocker{})
+		defer jobORM.Close()
 
 		dbSpec := makeVoterTurnoutOCRJobSpec(t, db, transmitterAddress)
 
@@ -142,7 +138,7 @@ func TestPipelineORM_Integration(t *testing.T) {
 		pipelineSpecID := pipelineSpecs[0].ID
 
 		// Create the run
-		runID, _, err := runner.ExecuteAndInsertFinishedRun(context.Background(), pipelineSpecs[0], pipeline.NewVarsFrom(nil), logger.TestLogger(t), true)
+		runID, _, err := runner.ExecuteAndInsertFinishedRun(context.Background(), pipelineSpecs[0], pipeline.NewVarsFrom(nil), *logger.Default, true)
 		require.NoError(t, err)
 
 		// Check the DB for the pipeline.Run
@@ -160,9 +156,9 @@ func TestPipelineORM_Integration(t *testing.T) {
 		require.Len(t, taskRuns, len(expectedTasks))
 
 		for _, taskRun := range taskRuns {
-			assert.Equal(t, runID, taskRun.PipelineRunID)
-			assert.False(t, taskRun.Output.Valid)
-			assert.False(t, taskRun.Error.IsZero())
+			require.Equal(t, runID, taskRun.PipelineRunID)
+			require.Nil(t, taskRun.Output)
+			require.False(t, taskRun.Error.IsZero())
 		}
 	})
 }

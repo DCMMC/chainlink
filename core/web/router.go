@@ -27,14 +27,22 @@ import (
 	"github.com/smartcontractkit/chainlink/core/logger"
 	"github.com/smartcontractkit/chainlink/core/services/chainlink"
 	"github.com/smartcontractkit/chainlink/core/store/config"
+	"github.com/smartcontractkit/chainlink/core/store/orm"
+	"github.com/smartcontractkit/chainlink/core/web/presenters"
 	"github.com/ulule/limiter"
 	mgin "github.com/ulule/limiter/drivers/middleware/gin"
 	"github.com/ulule/limiter/drivers/store/memory"
 	"github.com/unrolled/secure"
 )
 
+var prometheus *ginprom.Prometheus
+
 func init() {
 	gin.DebugPrintRouteFunc = printRoutes
+
+	// ensure metrics are regsitered once per instance to avoid registering
+	// metrics multiple times (panic)
+	prometheus = ginprom.New(ginprom.Namespace("service"))
 }
 
 func printRoutes(httpMethod, absolutePath, handlerName string, nuHandlers int) {
@@ -52,31 +60,42 @@ const (
 	SessionExternalInitiatorKey = "external_initiator"
 )
 
+func explorerStatus(app chainlink.Application) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		es := presenters.NewExplorerStatus(app.GetStatsPusher())
+		b, err := json.Marshal(es)
+		if err != nil {
+			panic(err)
+		}
+
+		c.SetSameSite(http.SameSiteStrictMode)
+		c.SetCookie("explorer", (string)(b), 0, "", "", false, false)
+		c.Next()
+	}
+}
+
 // Router listens and responds to requests to the node for valid paths.
-func Router(app chainlink.Application, prometheus *ginprom.Prometheus) *gin.Engine {
+func Router(app chainlink.Application) *gin.Engine {
 	engine := gin.New()
-	config := app.GetConfig()
+	store := app.GetStore()
+	config := store.Config
 	secret, err := config.SessionSecret()
 	if err != nil {
-		app.GetLogger().Panic(err)
+		logger.Panic(err)
 	}
 	sessionStore := sessions.NewCookieStore(secret)
 	sessionStore.Options(config.SessionOptions())
 	cors := uiCorsHandler(config)
-	if prometheus != nil {
-		prometheus.Use(engine)
-	}
 
+	prometheus.Use(engine)
 	engine.Use(
 		limits.RequestSizeLimiter(config.DefaultHTTPLimit()),
 		loggerFunc(),
 		gin.Recovery(),
 		cors,
 		secureMiddleware(config),
+		prometheus.Instrument(),
 	)
-	if prometheus != nil {
-		engine.Use(prometheus.Instrument())
-	}
 	engine.Use(helmet.Default())
 
 	api := engine.Group(
@@ -86,6 +105,7 @@ func Router(app chainlink.Application, prometheus *ginprom.Prometheus) *gin.Engi
 			config.AuthenticatedRateLimit(),
 		),
 		sessions.Sessions(SessionName, sessionStore),
+		explorerStatus(app),
 	)
 
 	metricRoutes(app, api)
@@ -107,16 +127,9 @@ func rateLimiter(period time.Duration, limit int64) gin.HandlerFunc {
 	return mgin.NewMiddleware(limiter.New(store, rate))
 }
 
-type WebSecurityConfig interface {
-	AllowOrigins() string
-	Dev() bool
-	TLSRedirect() bool
-	TLSHost() string
-}
-
 // secureOptions configure security options for the secure middleware, mostly
 // for TLS redirection
-func secureOptions(cfg WebSecurityConfig) secure.Options {
+func secureOptions(cfg orm.ConfigReader) secure.Options {
 	return secure.Options{
 		FrameDeny:     true,
 		IsDevelopment: cfg.Dev(),
@@ -127,7 +140,7 @@ func secureOptions(cfg WebSecurityConfig) secure.Options {
 
 // secureMiddleware adds a TLS handler and redirector, to button up security
 // for this node
-func secureMiddleware(cfg WebSecurityConfig) gin.HandlerFunc {
+func secureMiddleware(cfg orm.ConfigReader) gin.HandlerFunc {
 	secureMiddleware := secure.New(secureOptions(cfg))
 	secureFunc := func() gin.HandlerFunc {
 		return func(c *gin.Context) {
@@ -149,10 +162,10 @@ func secureMiddleware(cfg WebSecurityConfig) gin.HandlerFunc {
 	return secureFunc
 }
 func metricRoutes(app chainlink.Application, r *gin.RouterGroup) {
-	group := r.Group("/debug", RequireAuth(app.SessionORM(), AuthenticateBySession))
+	group := r.Group("/debug", RequireAuth(app.GetStore(), AuthenticateBySession))
 	group.GET("/vars", expvar.Handler())
 
-	if app.GetConfig().Dev() {
+	if app.GetStore().Config.Dev() {
 		// No authentication because `go tool pprof` doesn't support it
 		pprofGroup := r.Group("/debug/pprof")
 		pprofGroup.GET("/", pprofHandler(pprof.Index))
@@ -178,14 +191,14 @@ func pprofHandler(h http.HandlerFunc) gin.HandlerFunc {
 }
 
 func sessionRoutes(app chainlink.Application, r *gin.RouterGroup) {
-	config := app.GetConfig()
+	config := app.GetStore().Config
 	unauth := r.Group("/", rateLimiter(
 		config.UnAuthenticatedRateLimitPeriod().Duration(),
 		config.UnAuthenticatedRateLimit(),
 	))
-	sc := SessionsController{app, nil}
+	sc := SessionsController{app}
 	unauth.POST("/sessions", sc.Create)
-	auth := r.Group("/", RequireAuth(app.SessionORM(), AuthenticateBySession))
+	auth := r.Group("/", RequireAuth(app.GetStore(), AuthenticateBySession))
 	auth.DELETE("/sessions", sc.Destroy)
 }
 
@@ -198,25 +211,42 @@ func healthRoutes(app chainlink.Application, r *gin.RouterGroup) {
 func v2Routes(app chainlink.Application, r *gin.RouterGroup) {
 	unauthedv2 := r.Group("/v2")
 
+	jr := JobRunsController{app}
+	unauthedv2.PATCH("/runs/:RunID", jr.Update)
+
+	sa := ServiceAgreementsController{app}
+	unauthedv2.POST("/service_agreements", sa.Create)
+
+	j := JobSpecsController{app}
+	jsec := JobSpecErrorsController{app}
 	prc := PipelineRunsController{app}
 	psec := PipelineJobSpecErrorsController{app}
 	unauthedv2.PATCH("/resume/:runID", prc.Resume)
 
-	authv2 := r.Group("/v2", RequireAuth(app.SessionORM(), AuthenticateByToken, AuthenticateBySession))
+	authv2 := r.Group("/v2", RequireAuth(app.GetStore(), AuthenticateByToken, AuthenticateBySession))
 	{
 		uc := UserController{app}
 		authv2.PATCH("/user/password", uc.UpdatePassword)
 		authv2.POST("/user/token", uc.NewAPIToken)
 		authv2.POST("/user/token/delete", uc.DeleteAPIToken)
 
-		wa := WebAuthnController{app, nil}
-		authv2.GET("/enroll_webauthn", wa.BeginRegistration)
-		authv2.POST("/enroll_webauthn", wa.FinishRegistration)
-
 		eia := ExternalInitiatorsController{app}
 		authv2.GET("/external_initiators", paginatedRequest(eia.Index))
 		authv2.POST("/external_initiators", eia.Create)
 		authv2.DELETE("/external_initiators/:Name", eia.Destroy)
+
+		authv2.POST("/specs", j.Create)
+		authv2.GET("/specs", paginatedRequest(j.Index))
+		authv2.GET("/specs/:SpecID", j.Show)
+		authv2.DELETE("/specs/:SpecID", j.Destroy)
+
+		authv2.GET("/runs", paginatedRequest(jr.Index))
+		authv2.GET("/runs/:RunID", jr.Show)
+		authv2.PUT("/runs/:RunID/cancellation", jr.Cancel)
+
+		authv2.DELETE("/job_spec_errors/:jobSpecErrorID", jsec.Destroy)
+
+		authv2.GET("/service_agreements/:SAID", sa.Show)
 
 		bt := BridgeTypesController{app}
 		authv2.GET("/bridge_types", paginatedRequest(bt.Index))
@@ -236,7 +266,6 @@ func v2Routes(app chainlink.Application, r *gin.RouterGroup) {
 		authv2.GET("/feeds_managers", feedsMgrCtlr.List)
 		authv2.POST("/feeds_managers", feedsMgrCtlr.Create)
 		authv2.GET("/feeds_managers/:id", feedsMgrCtlr.Show)
-		authv2.PATCH("/feeds_managers/:id", feedsMgrCtlr.Update)
 
 		tas := TxAttemptsController{app}
 		authv2.GET("/tx_attempts", paginatedRequest(tas.Index))
@@ -244,6 +273,9 @@ func v2Routes(app chainlink.Application, r *gin.RouterGroup) {
 		txs := TransactionsController{app}
 		authv2.GET("/transactions", paginatedRequest(txs.Index))
 		authv2.GET("/transactions/:TxHash", txs.Show)
+
+		bdc := BulkDeletesController{app}
+		authv2.DELETE("/bulk_delete_runs", bdc.Delete)
 
 		rc := ReplayController{app}
 		authv2.POST("/replay_from_block/:number", rc.ReplayFromBlock)
@@ -290,18 +322,16 @@ func v2Routes(app chainlink.Application, r *gin.RouterGroup) {
 		authv2.GET("/job_proposals", jpc.Index)
 		authv2.GET("/job_proposals/:id", jpc.Show)
 		authv2.POST("/job_proposals/:id/approve", jpc.Approve)
-		authv2.POST("/job_proposals/:id/cancel", jpc.Cancel)
 		authv2.POST("/job_proposals/:id/reject", jpc.Reject)
 		authv2.PATCH("/job_proposals/:id/spec", jpc.UpdateSpec)
+
+		mc := MigrateController{app}
+		authv2.POST("/migrate/:ID", mc.Migrate)
 
 		// PipelineRunsController
 		authv2.GET("/pipeline/runs", paginatedRequest(prc.Index))
 		authv2.GET("/jobs/:ID/runs", paginatedRequest(prc.Index))
 		authv2.GET("/jobs/:ID/runs/:runID", prc.Show)
-
-		// FeaturesController
-		fc := FeaturesController{app}
-		authv2.GET("/features", fc.Index)
 
 		// PipelineJobSpecErrorsController
 		authv2.DELETE("/pipeline/job_spec_errors/:ID", psec.Destroy)
@@ -309,27 +339,15 @@ func v2Routes(app chainlink.Application, r *gin.RouterGroup) {
 		lgc := LogController{app}
 		authv2.GET("/log", lgc.Get)
 		authv2.PATCH("/log", lgc.Patch)
-
-		chc := ChainsController{app}
-		authv2.GET("/chains/evm", paginatedRequest(chc.Index))
-		authv2.POST("/chains/evm", chc.Create)
-		authv2.GET("/chains/evm/:ID", chc.Show)
-		authv2.PATCH("/chains/evm/:ID", chc.Update)
-		authv2.DELETE("/chains/evm/:ID", chc.Delete)
-
-		nc := NodesController{app}
-		authv2.GET("/nodes", paginatedRequest(nc.Index))
-		authv2.GET("/chains/evm/:ID/nodes", paginatedRequest(nc.Index))
-		authv2.POST("/nodes", nc.Create)
-		authv2.DELETE("/nodes/:ID", nc.Delete)
 	}
 
 	ping := PingController{app}
-	userOrEI := r.Group("/v2", RequireAuth(app.SessionORM(),
+	userOrEI := r.Group("/v2", RequireAuth(app.GetStore(),
 		AuthenticateExternalInitiator,
 		AuthenticateByToken,
 		AuthenticateBySession,
 	))
+	userOrEI.POST("/specs/:SpecID/runs", jr.Create)
 	userOrEI.GET("/ping", ping.Show)
 	userOrEI.POST("/jobs/:ID/runs", prc.Create)
 }
@@ -343,7 +361,7 @@ var indexRateLimitPeriod = 1 * time.Minute
 
 // guiAssetRoutes serves the operator UI static files and index.html. Rate
 // limiting is disabled when in dev mode.
-func guiAssetRoutes(box packr.Box, engine *gin.Engine, config config.GeneralConfig) {
+func guiAssetRoutes(box packr.Box, engine *gin.Engine, config *config.Config) {
 	// Serve static files
 	assetsRouterHandlers := []gin.HandlerFunc{}
 	if !config.Dev() {
@@ -400,7 +418,7 @@ func guiAssetRoutes(box packr.Box, engine *gin.Engine, config config.GeneralConf
 			}
 
 		}
-		defer logger.ErrorIfCalling(file.Close)
+		defer logger.ErrorIfCalling(file.Close, "failed when close file")
 
 		http.ServeContent(c.Writer, c.Request, path, time.Time{}, file)
 	})
@@ -446,7 +464,7 @@ func loggerFunc() gin.HandlerFunc {
 }
 
 // Add CORS headers so UI can make api requests
-func uiCorsHandler(config WebSecurityConfig) gin.HandlerFunc {
+func uiCorsHandler(config orm.ConfigReader) gin.HandlerFunc {
 	c := cors.Config{
 		AllowMethods:     []string{"GET", "POST", "PATCH", "DELETE"},
 		AllowHeaders:     []string{"Origin", "Content-Type", "Accept"},

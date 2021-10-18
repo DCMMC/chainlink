@@ -23,10 +23,10 @@ func (t *MultiplyTask) Type() TaskType {
 	return TaskTypeMultiply
 }
 
-func (t *MultiplyTask) Run(_ context.Context, vars Vars, inputs []Result) (result Result, runInfo RunInfo) {
+func (t *MultiplyTask) Run(_ context.Context, vars Vars, inputs []Result) (result Result) {
 	_, err := CheckInputs(inputs, 0, 1, 0)
 	if err != nil {
-		return Result{Error: errors.Wrap(err, "task inputs")}, runInfo
+		return Result{Error: errors.Wrap(err, "task inputs")}
 	}
 
 	var (
@@ -38,9 +38,9 @@ func (t *MultiplyTask) Run(_ context.Context, vars Vars, inputs []Result) (resul
 		errors.Wrap(ResolveParam(&b, From(VarExpr(t.Times, vars), NonemptyString(t.Times))), "times"),
 	)
 	if err != nil {
-		return Result{Error: err}, runInfo
+		return Result{Error: err}
 	}
 
 	value := a.Decimal().Mul(b.Decimal())
-	return Result{Value: value}, runInfo
+	return Result{Value: value}
 }

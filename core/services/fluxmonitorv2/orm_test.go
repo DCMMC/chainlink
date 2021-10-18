@@ -6,12 +6,10 @@ import (
 	"time"
 
 	uuid "github.com/satori/go.uuid"
+
 	"gopkg.in/guregu/null.v4"
 
 	"github.com/smartcontractkit/chainlink/core/internal/cltest"
-	"github.com/smartcontractkit/chainlink/core/internal/testutils/evmtest"
-	"github.com/smartcontractkit/chainlink/core/internal/testutils/pgtest"
-	"github.com/smartcontractkit/chainlink/core/logger"
 	"github.com/smartcontractkit/chainlink/core/services/bulletprooftxmanager"
 	bptxmmocks "github.com/smartcontractkit/chainlink/core/services/bulletprooftxmanager/mocks"
 	"github.com/smartcontractkit/chainlink/core/services/fluxmonitorv2"
@@ -24,15 +22,16 @@ import (
 func TestORM_MostRecentFluxMonitorRoundID(t *testing.T) {
 	t.Parallel()
 
-	db := pgtest.NewGormDB(t)
+	corestore, cleanup := cltest.NewStore(t)
+	t.Cleanup(cleanup)
 
-	orm := fluxmonitorv2.NewORM(db, nil, nil)
+	orm := fluxmonitorv2.NewORM(corestore.DB, nil, nil)
 
 	address := cltest.NewAddress()
 
 	// Setup the rounds
 	for round := uint32(0); round < 10; round++ {
-		_, err := orm.FindOrCreateFluxMonitorRoundStats(address, round, 1)
+		_, err := orm.FindOrCreateFluxMonitorRoundStats(address, round)
 		require.NoError(t, err)
 	}
 
@@ -41,11 +40,10 @@ func TestORM_MostRecentFluxMonitorRoundID(t *testing.T) {
 	require.Equal(t, 10, count)
 
 	// Ensure round stats are not created again for the same address/roundID
-	stats, err := orm.FindOrCreateFluxMonitorRoundStats(address, uint32(0), 1)
+	stats, err := orm.FindOrCreateFluxMonitorRoundStats(address, uint32(0))
 	require.NoError(t, err)
 	require.Equal(t, uint32(0), stats.RoundID)
 	require.Equal(t, address, stats.Aggregator)
-	require.Equal(t, uint64(1), stats.NumNewRoundLogs)
 
 	count, err = orm.CountFluxMonitorRoundStats()
 	require.NoError(t, err)
@@ -79,21 +77,21 @@ func TestORM_MostRecentFluxMonitorRoundID(t *testing.T) {
 func TestORM_UpdateFluxMonitorRoundStats(t *testing.T) {
 	t.Parallel()
 
-	cfg := cltest.NewTestGeneralConfig(t)
-	db := pgtest.NewGormDB(t)
-	cfg.SetDB(db)
-
-	keyStore := cltest.NewKeyStore(t, db)
+	corestore, cleanup := cltest.NewStore(t)
+	t.Cleanup(cleanup)
 
 	// Instantiate a real pipeline ORM because we need to create a pipeline run
 	// for the foreign key constraint of the stats record
-	pipelineORM := pipeline.NewORM(db)
-
-	cc := evmtest.NewChainSet(t, evmtest.TestChainOpts{GeneralConfig: cfg, DB: db})
+	eventBroadcaster := postgres.NewEventBroadcaster(
+		corestore.Config.DatabaseURL(),
+		corestore.Config.DatabaseListenerMinReconnectInterval(),
+		corestore.Config.DatabaseListenerMaxReconnectDuration(),
+	)
+	pipelineORM := pipeline.NewORM(corestore.DB)
 	// Instantiate a real job ORM because we need to create a job to satisfy
 	// a check in pipeline.CreateRun
-	jobORM := job.NewORM(db, cc, pipelineORM, keyStore, logger.TestLogger(t))
-	orm := fluxmonitorv2.NewORM(db, nil, nil)
+	jobORM := job.NewORM(corestore.ORM.DB, corestore.Config, pipelineORM, eventBroadcaster, &postgres.NullAdvisoryLocker{})
+	orm := fluxmonitorv2.NewORM(corestore.DB, nil, nil)
 
 	address := cltest.NewAddress()
 	var roundID uint32 = 1
@@ -105,32 +103,30 @@ func TestORM_UpdateFluxMonitorRoundStats(t *testing.T) {
 	for expectedCount := uint64(1); expectedCount < 4; expectedCount++ {
 		f := time.Now()
 		runID, err := pipelineORM.InsertFinishedRun(
-			postgres.UnwrapGormDB(db),
+			corestore.DB,
 			pipeline.Run{
 				State:          pipeline.RunStatusCompleted,
 				PipelineSpecID: jb.PipelineSpec.ID,
 				PipelineSpec:   *jb.PipelineSpec,
 				CreatedAt:      time.Now(),
 				FinishedAt:     null.TimeFrom(f),
-				AllErrors:      pipeline.RunErrors{null.String{}},
-				FatalErrors:    pipeline.RunErrors{null.String{}},
-				Outputs:        pipeline.JSONSerializable{Val: []interface{}{10}, Valid: true},
-				PipelineTaskRuns: []pipeline.TaskRun{
-					{
-						ID:         uuid.NewV4(),
-						Type:       pipeline.TaskTypeHTTP,
-						Output:     pipeline.JSONSerializable{Val: 10, Valid: true},
-						CreatedAt:  f,
-						FinishedAt: null.TimeFrom(f),
-					},
+				Errors:         pipeline.RunErrors{null.String{}},
+				Outputs:        pipeline.JSONSerializable{Val: []interface{}{10}},
+			}, pipeline.TaskRunResults{
+				{
+					ID:         uuid.NewV4(),
+					Task:       &pipeline.HTTPTask{},
+					Result:     pipeline.Result{Value: 10},
+					CreatedAt:  f,
+					FinishedAt: null.TimeFrom(f),
 				},
 			}, true)
 		require.NoError(t, err)
 
-		err = orm.UpdateFluxMonitorRoundStats(db, address, roundID, runID, 0)
+		err = orm.UpdateFluxMonitorRoundStats(corestore.DB, address, roundID, runID)
 		require.NoError(t, err)
 
-		stats, err := orm.FindOrCreateFluxMonitorRoundStats(address, roundID, 0)
+		stats, err := orm.FindOrCreateFluxMonitorRoundStats(address, roundID)
 		require.NoError(t, err)
 		require.Equal(t, expectedCount, stats.NumSubmissions)
 		require.True(t, stats.PipelineRunID.Valid)
@@ -163,31 +159,25 @@ func makeJob(t *testing.T) *job.Job {
 func TestORM_CreateEthTransaction(t *testing.T) {
 	t.Parallel()
 
-	db := pgtest.NewGormDB(t)
-	ethKeyStore := cltest.NewKeyStore(t, db).Eth()
+	corestore, cleanup := cltest.NewStore(t)
+	t.Cleanup(cleanup)
 
 	strategy := new(bptxmmocks.TxStrategy)
 
 	var (
 		txm = new(bptxmmocks.TxManager)
-		orm = fluxmonitorv2.NewORM(db, txm, strategy)
+		orm = fluxmonitorv2.NewORM(corestore.DB, txm, strategy)
 
-		_, from  = cltest.MustInsertRandomKey(t, ethKeyStore, 0)
+		key      = cltest.MustInsertRandomKey(t, corestore.DB, 0)
+		from     = key.Address.Address()
 		to       = cltest.NewAddress()
 		payload  = []byte{1, 0, 0}
 		gasLimit = uint64(21000)
 	)
 
-	txm.On("CreateEthTransaction", db, bulletprooftxmanager.NewTx{
-		FromAddress:    from,
-		ToAddress:      to,
-		EncodedPayload: payload,
-		GasLimit:       gasLimit,
-		Meta:           nil,
-		Strategy:       strategy,
-	}).Return(bulletprooftxmanager.EthTx{}, nil).Once()
+	txm.On("CreateEthTransaction", corestore.DB, from, to, payload, gasLimit, nil, strategy).Return(bulletprooftxmanager.EthTx{}, nil).Once()
 
-	orm.CreateEthTransaction(db, from, to, payload, gasLimit)
+	orm.CreateEthTransaction(corestore.DB, from, to, payload, gasLimit)
 
 	txm.AssertExpectations(t)
 }

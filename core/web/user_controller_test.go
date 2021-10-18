@@ -9,16 +9,16 @@ import (
 
 	"github.com/smartcontractkit/chainlink/core/auth"
 	"github.com/smartcontractkit/chainlink/core/internal/cltest"
-	"github.com/smartcontractkit/chainlink/core/sessions"
+	"github.com/smartcontractkit/chainlink/core/store/models"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
 func TestUserController_UpdatePassword(t *testing.T) {
-	app := cltest.NewApplicationEVMDisabled(t)
+	app, cleanup := cltest.NewApplicationWithKey(t)
+	t.Cleanup(cleanup)
 	require.NoError(t, app.Start())
-
 	client := app.NewHTTPClient()
 
 	testCases := []struct {
@@ -69,11 +69,16 @@ func TestUserController_UpdatePassword(t *testing.T) {
 func TestUserController_NewAPIToken(t *testing.T) {
 	t.Parallel()
 
-	app := cltest.NewApplicationEVMDisabled(t)
+	ethClient, _, assertMocksCalled := cltest.NewEthMocksWithStartupAssertions(t)
+	defer assertMocksCalled()
+	app, cleanup := cltest.NewApplicationWithKey(t,
+		ethClient,
+	)
+	defer cleanup()
 	require.NoError(t, app.Start())
 
 	client := app.NewHTTPClient()
-	req, err := json.Marshal(sessions.ChangeAuthTokenRequest{
+	req, err := json.Marshal(models.ChangeAuthTokenRequest{
 		Password: cltest.Password,
 	})
 	require.NoError(t, err)
@@ -91,11 +96,16 @@ func TestUserController_NewAPIToken(t *testing.T) {
 func TestUserController_NewAPIToken_unauthorized(t *testing.T) {
 	t.Parallel()
 
-	app := cltest.NewApplicationEVMDisabled(t)
+	ethClient, _, assertMocksCalled := cltest.NewEthMocksWithStartupAssertions(t)
+	defer assertMocksCalled()
+	app, cleanup := cltest.NewApplicationWithKey(t,
+		ethClient,
+	)
+	defer cleanup()
 	require.NoError(t, app.Start())
 
 	client := app.NewHTTPClient()
-	req, err := json.Marshal(sessions.ChangeAuthTokenRequest{
+	req, err := json.Marshal(models.ChangeAuthTokenRequest{
 		Password: "wrong-password",
 	})
 	require.NoError(t, err)
@@ -107,11 +117,16 @@ func TestUserController_NewAPIToken_unauthorized(t *testing.T) {
 func TestUserController_DeleteAPIKey(t *testing.T) {
 	t.Parallel()
 
-	app := cltest.NewApplicationEVMDisabled(t)
+	ethClient, _, assertMocksCalled := cltest.NewEthMocksWithStartupAssertions(t)
+	defer assertMocksCalled()
+	app, cleanup := cltest.NewApplicationWithKey(t,
+		ethClient,
+	)
+	defer cleanup()
 	require.NoError(t, app.Start())
 
 	client := app.NewHTTPClient()
-	req, err := json.Marshal(sessions.ChangeAuthTokenRequest{
+	req, err := json.Marshal(models.ChangeAuthTokenRequest{
 		Password: cltest.Password,
 	})
 	require.NoError(t, err)
@@ -124,11 +139,16 @@ func TestUserController_DeleteAPIKey(t *testing.T) {
 func TestUserController_DeleteAPIKey_unauthorized(t *testing.T) {
 	t.Parallel()
 
-	app := cltest.NewApplicationEVMDisabled(t)
+	ethClient, _, assertMocksCalled := cltest.NewEthMocksWithStartupAssertions(t)
+	defer assertMocksCalled()
+	app, cleanup := cltest.NewApplicationWithKey(t,
+		ethClient,
+	)
+	defer cleanup()
 	require.NoError(t, app.Start())
 
 	client := app.NewHTTPClient()
-	req, err := json.Marshal(sessions.ChangeAuthTokenRequest{
+	req, err := json.Marshal(models.ChangeAuthTokenRequest{
 		Password: "wrong-password",
 	})
 	require.NoError(t, err)

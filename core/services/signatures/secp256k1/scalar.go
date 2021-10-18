@@ -25,7 +25,6 @@ import (
 )
 
 var GroupOrder = secp256k1BTCD.S256().N
-var FieldSize = secp256k1BTCD.S256().P
 
 type secp256k1Scalar big.Int
 

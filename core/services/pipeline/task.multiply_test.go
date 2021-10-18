@@ -6,7 +6,6 @@ import (
 
 	"github.com/pkg/errors"
 	"github.com/shopspring/decimal"
-	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/smartcontractkit/chainlink/core/services/pipeline"
@@ -111,9 +110,7 @@ func TestMultiplyTask_Happy(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			vars := pipeline.NewVarsFrom(nil)
 			task := pipeline.MultiplyTask{BaseTask: pipeline.NewBaseTask(0, "task", nil, nil, 0), Times: test.times}
-			result, runInfo := task.Run(context.Background(), vars, []pipeline.Result{{Value: test.input}})
-			assert.False(t, runInfo.IsPending)
-			assert.False(t, runInfo.IsRetryable)
+			result := task.Run(context.Background(), vars, []pipeline.Result{{Value: test.input}})
 			require.NoError(t, result.Error)
 			require.Equal(t, test.want.String(), result.Value.(decimal.Decimal).String())
 		})
@@ -131,9 +128,7 @@ func TestMultiplyTask_Happy(t *testing.T) {
 				Input:    "$(foo.bar)",
 				Times:    "$(chain.link)",
 			}
-			result, runInfo := task.Run(context.Background(), vars, []pipeline.Result{})
-			assert.False(t, runInfo.IsPending)
-			assert.False(t, runInfo.IsRetryable)
+			result := task.Run(context.Background(), vars, []pipeline.Result{})
 			require.NoError(t, result.Error)
 			require.Equal(t, test.want.String(), result.Value.(decimal.Decimal).String())
 		})
@@ -170,9 +165,7 @@ func TestMultiplyTask_Unhappy(t *testing.T) {
 				Input:    test.input,
 				Times:    test.times,
 			}
-			result, runInfo := task.Run(context.Background(), test.vars, test.inputs)
-			assert.False(t, runInfo.IsPending)
-			assert.False(t, runInfo.IsRetryable)
+			result := task.Run(context.Background(), test.vars, test.inputs)
 			require.Equal(t, test.wantErrorCause, errors.Cause(result.Error))
 			if test.wantErrorContains != "" {
 				require.Contains(t, result.Error.Error(), test.wantErrorContains)

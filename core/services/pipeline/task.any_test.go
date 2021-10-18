@@ -6,10 +6,8 @@ import (
 
 	"github.com/pkg/errors"
 	"github.com/shopspring/decimal"
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
-
 	"github.com/smartcontractkit/chainlink/core/services/pipeline"
+	"github.com/stretchr/testify/require"
 )
 
 func TestAny(t *testing.T) {
@@ -61,9 +59,7 @@ func TestAny(t *testing.T) {
 		test := test
 		t.Run(test.name, func(t *testing.T) {
 			task := pipeline.AnyTask{}
-			output, runInfo := task.Run(context.Background(), pipeline.NewVarsFrom(nil), test.inputs)
-			assert.False(t, runInfo.IsPending)
-			assert.False(t, runInfo.IsRetryable)
+			output := task.Run(context.Background(), pipeline.NewVarsFrom(nil), test.inputs)
 			if output.Error != nil {
 				require.Equal(t, test.want.Error, errors.Cause(output.Error))
 				require.Nil(t, output.Value)

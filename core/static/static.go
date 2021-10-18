@@ -5,12 +5,10 @@ import (
 	"net/url"
 	"time"
 
-	"github.com/Masterminds/semver/v3"
 	uuid "github.com/satori/go.uuid"
 )
 
-// Version is the version of application
-// Must be either "unset" or valid semver
+// Version the version of application
 var Version = "unset"
 
 // Sha string "unset"
@@ -33,16 +31,6 @@ const (
 func init() {
 	InitTime = time.Now()
 	InstanceUUID = uuid.NewV4()
-
-	checkVersion()
-}
-
-func checkVersion() {
-	if Version == "unset" {
-		return
-	} else if _, err := semver.NewVersion(Version); err != nil {
-		panic(fmt.Sprintf("Version invalid: %q is not valid semver", Version))
-	}
 }
 
 func buildPrettyVersion() string {
@@ -66,7 +54,7 @@ func SetConsumerName(uri *url.URL, name string) {
 }
 
 const (
-	EvmMaxInFlightTransactionsWarningLabel = `WARNING: If this happens a lot, you may need to increase ETH_MAX_IN_FLIGHT_TRANSACTIONS to boost your node's transaction throughput, however you do this at your own risk. You MUST first ensure your ethereum node is configured not to ever evict local transactions that exceed this number otherwise the node can get permanently stuck`
-	EvmMaxQueuedTransactionsLabel          = `WARNING: Hitting ETH_MAX_QUEUED_TRANSACTIONS is a sanity limit and should never happen under normal operation. This error is very unlikely to be a problem with Chainlink, and instead more likely to be caused by a problem with your eth node's connectivity. Check your eth node: it may not be broadcasting transactions to the network, or it might be overloaded and evicting Chainlink's transactions from its mempool. Increasing ETH_MAX_QUEUED_TRANSACTIONS is almost certainly not the correct action to take here unless you ABSOLUTELY know what you are doing, and will probably make things worse`
+	EthMaxInFlightTransactionsWarningLabel = `WARNING: If this happens a lot, you may need to increase ETH_MAX_IN_FLIGHT_TRANSACTIONS to boost your node's transaction throughput, however you do this at your own risk. You MUST first ensure your ethereum node is configured not to ever evict local transactions that exceed this number otherwise the node can get permanently stuck`
+	EthMaxQueuedTransactionsLabel          = `WARNING: Hitting ETH_MAX_QUEUED_TRANSACTIONS is a sanity limit and should never happen under normal operation. This error is very unlikely to be a problem with Chainlink, and instead more likely to be caused by a problem with your eth node's connectivity. Check your eth node: it may not be broadcasting transactions to the network, or it might be overloaded and evicting Chainlink's transactions from its mempool. Increasing ETH_MAX_QUEUED_TRANSACTIONS is almost certainly not the correct action to take here unless you ABSOLUTELY know what you are doing, and will probably make things worse`
 	EthNodeConnectivityProblemLabel        = `WARNING: If this happens a lot, it may be a sign that your eth node has a connectivity problem, and your transactions are not making it to any miners`
 )

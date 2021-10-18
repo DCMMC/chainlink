@@ -1,17 +1,21 @@
 import { ApiResponse } from 'utils/json-api-client'
-import { JobRunV2 } from 'core/store/models'
+import { JobRun, OcrJobRun } from 'core/store/models'
 import { parseDot, Stratify } from './parseDot'
-import { PipelineJobRun, PipelineTaskRun } from './sharedTypes'
-import { getJobStatus } from './utils'
+import {
+  DirectRequestJobRun,
+  PipelineJobRun,
+  PipelineTaskRun,
+} from './sharedTypes'
+import { getOcrJobStatus } from './utils'
 
 function getTaskStatus({
   taskRun: { dotId, finishedAt, error },
   stratify,
   taskRuns,
 }: {
-  taskRun: JobRunV2['taskRuns'][0]
+  taskRun: OcrJobRun['taskRuns'][0]
   stratify: Stratify[]
-  taskRuns: JobRunV2['taskRuns']
+  taskRuns: OcrJobRun['taskRuns']
 }) {
   if (finishedAt === null) {
     return 'in_progress'
@@ -40,35 +44,42 @@ function getTaskStatus({
   return 'completed'
 }
 
-const addTaskStatus =
-  (stratify: Stratify[]) =>
-  (
-    taskRun: JobRunV2['taskRuns'][0],
-    _index: number,
-    taskRuns: JobRunV2['taskRuns'],
-  ): PipelineTaskRun => {
-    return {
-      ...taskRun,
-      status: getTaskStatus({ taskRun, stratify, taskRuns }),
-    }
+const addTaskStatus = (stratify: Stratify[]) => (
+  taskRun: OcrJobRun['taskRuns'][0],
+  _index: number,
+  taskRuns: OcrJobRun['taskRuns'],
+): PipelineTaskRun => {
+  return {
+    ...taskRun,
+    status: getTaskStatus({ taskRun, stratify, taskRuns }),
   }
+}
 
-export const transformPipelineJobRun =
-  (jobSpecId: string) =>
-  (jobRun: ApiResponse<JobRunV2>['data']): PipelineJobRun => {
-    const stratify = parseDot(
-      `digraph {${jobRun.attributes.pipelineSpec.dotDagSource}}`,
-    )
-    let taskRuns: PipelineTaskRun[] = []
-    if (jobRun.attributes.taskRuns != null) {
-      taskRuns = jobRun.attributes.taskRuns.map(addTaskStatus(stratify))
-    }
-    return {
-      ...jobRun.attributes,
-      id: jobRun.id,
-      jobId: jobSpecId,
-      status: getJobStatus(jobRun.attributes),
-      taskRuns,
-      type: 'Pipeline job run',
-    }
+export const transformPipelineJobRun = (jobSpecId: string) => (
+  jobRun: ApiResponse<OcrJobRun>['data'],
+): PipelineJobRun => {
+  const stratify = parseDot(
+    `digraph {${jobRun.attributes.pipelineSpec.dotDagSource}}`,
+  )
+  let taskRuns: PipelineTaskRun[] = []
+  if (jobRun.attributes.taskRuns != null) {
+    taskRuns = jobRun.attributes.taskRuns.map(addTaskStatus(stratify))
   }
+  return {
+    ...jobRun.attributes,
+    id: jobRun.id,
+    jobId: jobSpecId,
+    status: getOcrJobStatus(jobRun.attributes),
+    taskRuns,
+    type: 'Pipeline job run',
+  }
+}
+
+export const transformDirectRequestJobRun = (jobSpecId: string) => (
+  jobRun: ApiResponse<JobRun>['data'],
+): DirectRequestJobRun => ({
+  ...jobRun.attributes,
+  id: jobRun.id,
+  jobId: jobSpecId,
+  type: 'Direct request job run',
+})

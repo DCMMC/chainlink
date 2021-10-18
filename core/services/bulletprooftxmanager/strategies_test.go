@@ -5,7 +5,6 @@ import (
 
 	uuid "github.com/satori/go.uuid"
 	"github.com/smartcontractkit/chainlink/core/internal/cltest"
-	"github.com/smartcontractkit/chainlink/core/internal/testutils/pgtest"
 	"github.com/smartcontractkit/chainlink/core/services/bulletprooftxmanager"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -27,21 +26,19 @@ func Test_DropOldestStrategy_Subject(t *testing.T) {
 	t.Parallel()
 
 	subject := uuid.NewV4()
-	s := bulletprooftxmanager.NewDropOldestStrategy(subject, 1, false)
+	s := bulletprooftxmanager.NewDropOldestStrategy(subject, 1)
 
 	assert.True(t, s.Subject().Valid)
 	assert.Equal(t, subject, s.Subject().UUID)
-	assert.False(t, s.Simulate())
-
-	s = bulletprooftxmanager.NewDropOldestStrategy(subject, 1, true)
-	assert.True(t, s.Simulate())
 }
 
 func Test_DropOldestStrategy_PruneQueue(t *testing.T) {
 	t.Parallel()
 
-	db := pgtest.NewGormDB(t)
-	ethKeyStore := cltest.NewKeyStore(t, db).Eth()
+	store, cleanup := cltest.NewStore(t)
+	t.Cleanup(cleanup)
+	db := store.DB
+	ethKeyStore := cltest.NewKeyStore(t, store.DB).Eth()
 
 	subj1 := uuid.NewV4()
 	subj2 := uuid.NewV4()
@@ -54,9 +51,9 @@ func Test_DropOldestStrategy_PruneQueue(t *testing.T) {
 	cltest.MustInsertFatalErrorEthTx(t, db, fromAddress)
 	cltest.MustInsertInProgressEthTxWithAttempt(t, db, n, fromAddress)
 	n++
-	cltest.MustInsertConfirmedEthTxWithLegacyAttempt(t, db, n, 42, fromAddress)
+	cltest.MustInsertConfirmedEthTxWithAttempt(t, db, n, 42, fromAddress)
 	n++
-	cltest.MustInsertUnconfirmedEthTxWithBroadcastLegacyAttempt(t, db, n, fromAddress)
+	cltest.MustInsertUnconfirmedEthTxWithBroadcastAttempt(t, db, n, fromAddress)
 	n++
 	initialEtxs := []bulletprooftxmanager.EthTx{
 		cltest.MustInsertUnstartedEthTx(t, db, fromAddress, subj1),
@@ -67,7 +64,7 @@ func Test_DropOldestStrategy_PruneQueue(t *testing.T) {
 	}
 
 	t.Run("with queue size of 2, removes everything except the newest two transactions for the given subject, ignoring fromAddress", func(t *testing.T) {
-		s := bulletprooftxmanager.NewDropOldestStrategy(subj1, 2, false)
+		s := bulletprooftxmanager.NewDropOldestStrategy(subj1, 2)
 
 		n, err := s.PruneQueue(db)
 		require.NoError(t, err)

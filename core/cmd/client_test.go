@@ -2,21 +2,15 @@ package cmd_test
 
 import (
 	"testing"
-	"time"
 
 	"github.com/smartcontractkit/chainlink/core/cmd"
 	"github.com/smartcontractkit/chainlink/core/internal/cltest"
-	"github.com/smartcontractkit/chainlink/core/internal/testutils/pgtest"
-	"github.com/smartcontractkit/chainlink/core/sessions"
+	"github.com/smartcontractkit/chainlink/core/store/config"
+	"github.com/smartcontractkit/chainlink/core/store/models"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
-
-type cfg struct{}
-
-func (c cfg) ClientNodeURL() string    { return "" }
-func (c cfg) InsecureSkipVerify() bool { return false }
 
 func TestTerminalCookieAuthenticator_AuthenticateWithoutSession(t *testing.T) {
 	t.Parallel()
@@ -31,9 +25,11 @@ func TestTerminalCookieAuthenticator_AuthenticateWithoutSession(t *testing.T) {
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			sr := sessions.SessionRequest{Email: test.email, Password: test.pwd}
+			cfg := config.NewConfig()
+
+			sr := models.SessionRequest{Email: test.email, Password: test.pwd}
 			store := &cmd.MemoryCookieStore{}
-			tca := cmd.NewSessionCookieAuthenticator(cfg{}, store)
+			tca := cmd.NewSessionCookieAuthenticator(cfg, store)
 			cookie, err := tca.Authenticate(sr)
 
 			assert.Error(t, err)
@@ -48,7 +44,12 @@ func TestTerminalCookieAuthenticator_AuthenticateWithoutSession(t *testing.T) {
 func TestTerminalCookieAuthenticator_AuthenticateWithSession(t *testing.T) {
 	t.Parallel()
 
-	app := cltest.NewApplicationEVMDisabled(t)
+	ethClient, _, assertMocksCalled := cltest.NewEthMocksWithStartupAssertions(t)
+	defer assertMocksCalled()
+	app, cleanup := cltest.NewApplication(t,
+		ethClient,
+	)
+	defer cleanup()
 	require.NoError(t, app.Start())
 
 	tests := []struct {
@@ -62,9 +63,9 @@ func TestTerminalCookieAuthenticator_AuthenticateWithSession(t *testing.T) {
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			sr := sessions.SessionRequest{Email: test.email, Password: test.pwd}
+			sr := models.SessionRequest{Email: test.email, Password: test.pwd}
 			store := &cmd.MemoryCookieStore{}
-			tca := cmd.NewSessionCookieAuthenticator(app.GetConfig(), store)
+			tca := cmd.NewSessionCookieAuthenticator(app.Config.Config, store)
 			cookie, err := tca.Authenticate(sr)
 
 			if test.wantError {
@@ -86,35 +87,31 @@ func TestTerminalCookieAuthenticator_AuthenticateWithSession(t *testing.T) {
 	}
 }
 
-type diskCookieStoreConfig struct{ rootdir string }
-
-func (d diskCookieStoreConfig) RootDir() string {
-	return d.rootdir
-}
-
 func TestDiskCookieStore_Retrieve(t *testing.T) {
 	t.Parallel()
 
-	cfg := diskCookieStoreConfig{}
+	tc, cleanup := cltest.NewConfig(t)
+	defer cleanup()
+	config := tc.Config
 
 	t.Run("missing cookie file", func(t *testing.T) {
-		store := cmd.DiskCookieStore{Config: cfg}
+		store := cmd.DiskCookieStore{Config: config}
 		cookie, err := store.Retrieve()
 		assert.NoError(t, err)
 		assert.Nil(t, cookie)
 	})
 
 	t.Run("invalid cookie file", func(t *testing.T) {
-		cfg.rootdir = "../internal/fixtures/badcookie"
-		store := cmd.DiskCookieStore{Config: cfg}
+		config.Set("ROOT", "../internal/fixtures/badcookie")
+		store := cmd.DiskCookieStore{Config: config}
 		cookie, err := store.Retrieve()
 		assert.Error(t, err)
 		assert.Nil(t, cookie)
 	})
 
 	t.Run("valid cookie file", func(t *testing.T) {
-		cfg.rootdir = "../internal/fixtures"
-		store := cmd.DiskCookieStore{Config: cfg}
+		config.Set("ROOT", "../internal/fixtures")
+		store := cmd.DiskCookieStore{Config: config}
 		cookie, err := store.Retrieve()
 		assert.NoError(t, err)
 		assert.NotNil(t, cookie)
@@ -137,24 +134,24 @@ func TestTerminalAPIInitializer_InitializeWithoutAPIUser(t *testing.T) {
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			db := pgtest.NewSqlxDB(t)
-			orm := sessions.NewORM(db, time.Minute)
+			store, cleanup := cltest.NewStore(t)
+			defer cleanup()
 
 			mock := &cltest.MockCountingPrompter{EnteredStrings: test.enteredStrings, NotTerminal: !test.isTerminal}
 			tai := cmd.NewPromptingAPIInitializer(mock)
 
 			// Remove fixture user
-			err := orm.DeleteUser()
+			err := store.DeleteUser()
 			require.NoError(t, err)
 
-			user, err := tai.Initialize(orm)
+			user, err := tai.Initialize(store)
 			if test.isError {
 				assert.Error(t, err)
 			} else {
 				assert.NoError(t, err)
 				assert.Equal(t, len(test.enteredStrings), mock.Count)
 
-				persistedUser, err := orm.FindUser()
+				persistedUser, err := store.FindUser()
 				assert.NoError(t, err)
 
 				assert.Equal(t, user.Email, persistedUser.Email)
@@ -167,16 +164,16 @@ func TestTerminalAPIInitializer_InitializeWithoutAPIUser(t *testing.T) {
 func TestTerminalAPIInitializer_InitializeWithExistingAPIUser(t *testing.T) {
 	t.Parallel()
 
-	db := pgtest.NewSqlxDB(t)
-	orm := sessions.NewORM(db, time.Minute)
+	store, cleanup := cltest.NewStore(t)
+	defer cleanup()
 
-	initialUser := cltest.MustRandomUser(t)
-	require.NoError(t, orm.CreateUser(&initialUser))
+	initialUser := cltest.MustRandomUser()
+	require.NoError(t, store.SaveUser(&initialUser))
 
 	mock := &cltest.MockCountingPrompter{}
 	tai := cmd.NewPromptingAPIInitializer(mock)
 
-	user, err := tai.Initialize(orm)
+	user, err := tai.Initialize(store)
 	assert.NoError(t, err)
 	assert.Equal(t, 0, mock.Count)
 
@@ -196,19 +193,19 @@ func TestFileAPIInitializer_InitializeWithoutAPIUser(t *testing.T) {
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			db := pgtest.NewSqlxDB(t)
-			orm := sessions.NewORM(db, time.Minute)
+			store, cleanup := cltest.NewStore(t)
 			// Clear out fixture user
-			orm.DeleteUser()
+			store.DeleteUser()
+			defer cleanup()
 
 			tfi := cmd.NewFileAPIInitializer(test.file)
-			user, err := tfi.Initialize(orm)
+			user, err := tfi.Initialize(store)
 			if test.wantError {
 				assert.Error(t, err)
 			} else {
 				assert.NoError(t, err)
 				assert.Equal(t, cltest.APIEmail, user.Email)
-				persistedUser, err := orm.FindUser()
+				persistedUser, err := store.FindUser()
 				assert.NoError(t, err)
 				assert.Equal(t, persistedUser.Email, user.Email)
 			}
@@ -219,8 +216,8 @@ func TestFileAPIInitializer_InitializeWithoutAPIUser(t *testing.T) {
 func TestFileAPIInitializer_InitializeWithExistingAPIUser(t *testing.T) {
 	t.Parallel()
 
-	db := pgtest.NewSqlxDB(t)
-	orm := sessions.NewORM(db, time.Minute)
+	store, cleanup := cltest.NewStore(t)
+	defer cleanup()
 
 	tests := []struct {
 		name      string
@@ -234,7 +231,7 @@ func TestFileAPIInitializer_InitializeWithExistingAPIUser(t *testing.T) {
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			tfi := cmd.NewFileAPIInitializer(test.file)
-			user, err := tfi.Initialize(orm)
+			user, err := tfi.Initialize(store)
 			assert.NoError(t, err)
 			assert.Equal(t, cltest.APIEmail, user.Email)
 		})

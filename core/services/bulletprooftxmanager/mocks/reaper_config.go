@@ -13,6 +13,20 @@ type ReaperConfig struct {
 	mock.Mock
 }
 
+// EthFinalityDepth provides a mock function with given fields:
+func (_m *ReaperConfig) EthFinalityDepth() uint {
+	ret := _m.Called()
+
+	var r0 uint
+	if rf, ok := ret.Get(0).(func() uint); ok {
+		r0 = rf()
+	} else {
+		r0 = ret.Get(0).(uint)
+	}
+
+	return r0
+}
+
 // EthTxReaperInterval provides a mock function with given fields:
 func (_m *ReaperConfig) EthTxReaperInterval() time.Duration {
 	ret := _m.Called()
@@ -36,20 +50,6 @@ func (_m *ReaperConfig) EthTxReaperThreshold() time.Duration {
 		r0 = rf()
 	} else {
 		r0 = ret.Get(0).(time.Duration)
-	}
-
-	return r0
-}
-
-// EvmFinalityDepth provides a mock function with given fields:
-func (_m *ReaperConfig) EvmFinalityDepth() uint32 {
-	ret := _m.Called()
-
-	var r0 uint32
-	if rf, ok := ret.Get(0).(func() uint32); ok {
-		r0 = rf()
-	} else {
-		r0 = ret.Get(0).(uint32)
 	}
 
 	return r0

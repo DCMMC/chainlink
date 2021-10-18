@@ -42,7 +42,7 @@ regarding Chainlink social accounts, news, and networking.
 
 ## Install
 
-1. [Install Go 1.17](https://golang.org/doc/install), and add your GOPATH's [bin directory to your PATH](https://golang.org/doc/code.html#GOPATH)
+1. [Install Go 1.15](https://golang.org/doc/install), and add your GOPATH's [bin directory to your PATH](https://golang.org/doc/code.html#GOPATH)
    - Example Path for macOS `export PATH=$GOPATH/bin:$PATH` & `export GOPATH=/Users/$USER/go`
 2. Install [NodeJS 12.18](https://nodejs.org/en/download/package-manager/) & [Yarn](https://yarnpkg.com/lang/en/docs/install/)
    - It might be easier long term to use [nvm](https://nodejs.org/en/download/package-manager/#nvm) to switch between node versions for different projects: `nvm install 12.18 && nvm use 12.18`
@@ -78,18 +78,19 @@ By default this will start on port 6688, where it exposes a [REST API](https://g
 Once your node has started, you can view your current jobs with:
 
 ```bash
-chainlink jobs list
+chainlink job_specs list # v1 jobs
+chainlink jobs list # v2 jobs
 ```
 
 View details of a specific job with:
 
 ```bash
-chainlink job show [$JOB_ID]
+chainlink job_specs show "$JOB_ID # v1 jobs"
 ```
 
 To find out more about the Chainlink CLI, you can always run `chainlink help`.
 
-Check out the [doc](https://docs.chain.link/) pages on [Jobs](https://docs.chain.link/docs/jobs/) to learn more about how to create Jobs.
+Check out the [docs'](https://docs.chain.link/) pages on [Adapters](https://docs.chain.link/docs/adapters) and [Initiators](https://docs.chain.link/docs/initiators) to learn more about how to create Jobs and Runs.
 
 ## Configure
 
@@ -101,7 +102,9 @@ Chainlink is a monorepo containing several logically separatable and relatable
 projects.
 
 - [core](./core) - the core Chainlink node
+- [@chainlink/belt](./belt) - tools for performing commands on Chainlink smart contracts
 - [@chainlink/contracts](./contracts) - smart contracts
+- [@chainlink/test-helpers](./evm-test-helpers) - smart contract-related resources
 - [integration/forks](./integration/forks) - integration test for [ommers](https://ethereum.stackexchange.com/a/46/19503) and [re-orgs](https://en.bitcoin.it/wiki/Chain_Reorganization)
 - [tools](./tools) - Chainlink tools
 
@@ -176,6 +179,28 @@ go test -parallel=1 ./...
 ```
 
 ### Solidity Development
+
+> Note: `evm-contracts/` directory houses Solidity versions <=0.7. New contracts, using v0.8, are being developed in the `contracts/` directory, using hardhat.
+
+Inside the `evm-contracts/` directory:
+
+1. [Install Yarn](https://yarnpkg.com/lang/en/docs/install)
+2. Install the dependencies:
+
+```bash
+yarn
+yarn setup
+```
+
+3. Run tests:
+
+   i. Solidity versions `0.4.x` to `0.7.x`:
+
+   ```bash
+   yarn test
+   ```
+
+#### Solidity >=v0.8
 
 Inside the `contracts/` directory:
 1. Install dependencies:

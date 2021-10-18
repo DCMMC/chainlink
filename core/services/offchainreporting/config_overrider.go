@@ -12,12 +12,12 @@ import (
 	"github.com/smartcontractkit/chainlink/core/logger"
 	"github.com/smartcontractkit/chainlink/core/services/keystore/keys/ethkey"
 	"github.com/smartcontractkit/chainlink/core/utils"
-	ocrtypes "github.com/smartcontractkit/libocr/offchainreporting/types"
+	ocrtypes "github.com/DCMMC/libocr/offchainreporting/types"
 )
 
 type ConfigOverriderImpl struct {
 	utils.StartStopOnce
-	logger          logger.Logger
+	logger          *logger.Logger
 	flags           *ContractFlags
 	contractAddress ethkey.EIP55Address
 
@@ -38,7 +38,7 @@ type ConfigOverriderImpl struct {
 const InitialHibernationStatus = false
 
 func NewConfigOverriderImpl(
-	logger logger.Logger,
+	logger *logger.Logger,
 	contractAddress ethkey.EIP55Address,
 	flags *ContractFlags,
 	pollTicker utils.TickerBase,

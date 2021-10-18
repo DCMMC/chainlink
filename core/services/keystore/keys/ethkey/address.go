@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/smartcontractkit/chainlink/core/logger"
 	"github.com/smartcontractkit/chainlink/core/utils"
 )
 
@@ -65,7 +66,8 @@ func (a EIP55Address) Hex() string {
 
 // Format implements fmt.Formatter
 func (a EIP55Address) Format(s fmt.State, c rune) {
-	_, _ = fmt.Fprint(s, a.String())
+	_, err := fmt.Fprint(s, a.String())
+	logger.ErrorIf(err, "failed when format EIP55Address to state")
 }
 
 // UnmarshalText parses a hash from plain text
@@ -99,11 +101,6 @@ func (a *EIP55Address) Scan(value interface{}) error {
 		return fmt.Errorf("unable to convert %v of %T to EIP55Address", value, value)
 	}
 	return nil
-}
-
-// IsZeroAddress determines whether the address is 0x0000... or not
-func (a EIP55Address) IsZero() bool {
-	return a.Address() == common.Address{}
 }
 
 // EIP55AddressCollection is an array of EIP55Addresses.

@@ -4,14 +4,13 @@ import (
 	"flag"
 	"testing"
 
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/smartcontractkit/chainlink/core/cmd"
 	"github.com/smartcontractkit/chainlink/core/internal/cltest"
-	"github.com/smartcontractkit/chainlink/core/internal/testutils/configtest"
 	"github.com/smartcontractkit/chainlink/core/services/bulletprooftxmanager"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/urfave/cli"
-	null "gopkg.in/guregu/null.v4"
 )
 
 func TestClient_IndexTransactions(t *testing.T) {
@@ -20,10 +19,10 @@ func TestClient_IndexTransactions(t *testing.T) {
 	app := startNewApplication(t)
 	client, r := app.NewClientAndRenderer()
 
-	db := app.GetDB()
+	store := app.GetStore()
 	_, from := cltest.MustAddRandomKeyToKeystore(t, app.KeyStore.Eth())
 
-	tx := cltest.MustInsertConfirmedEthTxWithLegacyAttempt(t, db, 0, 1, from)
+	tx := cltest.MustInsertConfirmedEthTxWithAttempt(t, store.DB, 0, 1, from)
 	attempt := tx.EthTxAttempts[0]
 
 	// page 1
@@ -54,16 +53,16 @@ func TestClient_ShowTransaction(t *testing.T) {
 	app := startNewApplication(t)
 	client, r := app.NewClientAndRenderer()
 
-	db := app.GetDB()
+	store := app.GetStore()
 	_, from := cltest.MustAddRandomKeyToKeystore(t, app.KeyStore.Eth())
 
-	tx := cltest.MustInsertConfirmedEthTxWithLegacyAttempt(t, db, 0, 1, from)
+	tx := cltest.MustInsertConfirmedEthTxWithAttempt(t, store.DB, 0, 1, from)
 	attempt := tx.EthTxAttempts[0]
 
 	set := flag.NewFlagSet("test get tx", 0)
 	set.Parse([]string{attempt.Hash.Hex()})
 	c := cli.NewContext(nil, set, nil)
-	require.NoError(t, client.ShowTransaction(c))
+	assert.NoError(t, client.ShowTransaction(c))
 
 	renderedTx := *r.Renders[0].(*cmd.EthTxPresenter)
 	assert.Equal(t, &tx.FromAddress, renderedTx.From)
@@ -75,17 +74,17 @@ func TestClient_IndexTxAttempts(t *testing.T) {
 	app := startNewApplication(t)
 	client, r := app.NewClientAndRenderer()
 
-	db := app.GetDB()
+	store := app.GetStore()
 	_, from := cltest.MustAddRandomKeyToKeystore(t, app.KeyStore.Eth())
 
-	tx := cltest.MustInsertConfirmedEthTxWithLegacyAttempt(t, db, 0, 1, from)
+	tx := cltest.MustInsertConfirmedEthTxWithAttempt(t, store.DB, 0, 1, from)
 
 	// page 1
 	set := flag.NewFlagSet("test txattempts", 0)
 	set.Int("page", 1, "doc")
 	c := cli.NewContext(nil, set, nil)
 	require.Equal(t, 1, c.Int("page"))
-	require.NoError(t, client.IndexTxAttempts(c))
+	assert.NoError(t, client.IndexTxAttempts(c))
 
 	renderedAttempts := *r.Renders[0].(*cmd.EthTxPresenters)
 	require.Len(t, tx.EthTxAttempts, 1)
@@ -105,23 +104,21 @@ func TestClient_IndexTxAttempts(t *testing.T) {
 func TestClient_SendEther_From_BPTXM(t *testing.T) {
 	t.Parallel()
 
-	ethMock, assertMocksCalled := newEthMock(t)
-	defer assertMocksCalled()
+	oca := common.HexToAddress("0xDEADB3333333F")
 	app := startNewApplication(t,
 		withKey(),
-		withMocks(ethMock),
-		withConfigSet(func(c *configtest.TestGeneralConfig) {
-			c.Overrides.EVMDisabled = null.BoolFrom(false)
-			c.Overrides.GlobalEvmNonceAutoSync = null.BoolFrom(false)
-			c.Overrides.GlobalBalanceMonitorEnabled = null.BoolFrom(false)
+		withConfig(map[string]interface{}{
+			"OPERATOR_CONTRACT_ADDRESS": &oca,
 		}),
+		withMocks(newEthMock(t)),
+		startAndConnect(),
 	)
 	client, r := app.NewClientAndRenderer()
-	db := app.GetDB()
+	s := app.GetStore()
 
 	set := flag.NewFlagSet("sendether", 0)
 	amount := "100.5"
-	_, fromAddress := cltest.MustInsertRandomKey(t, app.KeyStore.Eth(), 0)
+	_, fromAddress := cltest.MustAddRandomKeyToKeystore(t, app.KeyStore.Eth(), 0)
 	to := "0x342156c8d3bA54Abc67920d35ba1d1e67201aC9C"
 	set.Parse([]string{amount, fromAddress.Hex(), to})
 
@@ -131,7 +128,7 @@ func TestClient_SendEther_From_BPTXM(t *testing.T) {
 	assert.NoError(t, client.SendEther(c))
 
 	etx := bulletprooftxmanager.EthTx{}
-	require.NoError(t, db.First(&etx).Error)
+	require.NoError(t, s.DB.First(&etx).Error)
 	require.Equal(t, "100.500000000000000000", etx.Value.String())
 	require.Equal(t, fromAddress, etx.FromAddress)
 	require.Equal(t, to, etx.ToAddress.Hex())

@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.0;
 
-import {CBORChainlink} from "./vendor/CBORChainlink.sol";
-import {BufferChainlink} from "./vendor/BufferChainlink.sol";
+import { CBORChainlink } from "./vendor/CBORChainlink.sol";
+import { BufferChainlink } from "./vendor/BufferChainlink.sol";
 
 /**
  * @title Library for common Chainlink functions
@@ -35,7 +35,13 @@ library Chainlink {
     bytes32 jobId,
     address callbackAddr,
     bytes4 callbackFunc
-  ) internal pure returns (Chainlink.Request memory) {
+  )
+    internal
+    pure
+    returns (
+      Chainlink.Request memory
+    )
+  {
     BufferChainlink.init(self.buf, defaultBufferSize);
     self.id = jobId;
     self.callbackAddress = callbackAddr;
@@ -49,7 +55,13 @@ library Chainlink {
    * @param self The initialized request
    * @param data The CBOR data
    */
-  function setBuffer(Request memory self, bytes memory data) internal pure {
+  function setBuffer(
+    Request memory self,
+    bytes memory data
+  )
+    internal
+    pure
+  {
     BufferChainlink.init(self.buf, data.length);
     BufferChainlink.append(self.buf, data);
   }
@@ -64,7 +76,10 @@ library Chainlink {
     Request memory self,
     string memory key,
     string memory value
-  ) internal pure {
+  )
+    internal
+    pure
+  {
     self.buf.encodeString(key);
     self.buf.encodeString(value);
   }
@@ -79,7 +94,10 @@ library Chainlink {
     Request memory self,
     string memory key,
     bytes memory value
-  ) internal pure {
+  )
+    internal
+    pure
+  {
     self.buf.encodeString(key);
     self.buf.encodeBytes(value);
   }
@@ -94,7 +112,10 @@ library Chainlink {
     Request memory self,
     string memory key,
     int256 value
-  ) internal pure {
+  )
+    internal
+    pure
+  {
     self.buf.encodeString(key);
     self.buf.encodeInt(value);
   }
@@ -109,7 +130,10 @@ library Chainlink {
     Request memory self,
     string memory key,
     uint256 value
-  ) internal pure {
+  )
+    internal
+    pure
+  {
     self.buf.encodeString(key);
     self.buf.encodeUInt(value);
   }
@@ -124,7 +148,10 @@ library Chainlink {
     Request memory self,
     string memory key,
     string[] memory values
-  ) internal pure {
+  )
+    internal
+    pure
+  {
     self.buf.encodeString(key);
     self.buf.startArray();
     for (uint256 i = 0; i < values.length; i++) {

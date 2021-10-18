@@ -1,7 +1,7 @@
 package offchainreporting
 
 import (
-	ocrtypes "github.com/smartcontractkit/libocr/offchainreporting/types"
+	ocrtypes "github.com/DCMMC/libocr/offchainreporting/types"
 )
 
 var _ ocrtypes.ContractConfigSubscription = &OCRContractConfigSubscription{}

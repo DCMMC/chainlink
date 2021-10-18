@@ -23,25 +23,18 @@ import ReactResizeDetector from 'react-resize-detector'
 import { useLocation } from 'react-router-dom'
 import { bindActionCreators, Dispatch } from 'redux'
 import { submitSignOut } from 'actionCreators'
-import { AccountMenu } from '../components/AccountMenu'
-import { SettingsMenu } from '../components/SettingsMenu'
+import AvatarMenu from '../components/AvatarMenu'
 import BaseLink from '../components/BaseLink'
 import LoadingBar from '../components/LoadingBar'
 import MainLogo from '../components/Logos/Main'
 import fetchCountSelector from '../selectors/fetchCount'
-import { Feature, useFeature } from 'src/hooks/useFeatureFlag'
+import { Feature, useFeature } from 'src/lib/featureFlags'
 
-const NAV_ITEMS = [
+const SHARED_NAV_ITEMS = [
   ['/jobs', 'Jobs'],
   ['/runs', 'Runs'],
-  ['/chains', 'Chains'],
-  ['/nodes', 'Nodes'],
   ['/bridges', 'Bridges'],
   ['/transactions', 'Transactions'],
-]
-
-const DRAWER_NAV_ITEMS = [
-  ...NAV_ITEMS,
   ['/keys', 'Keys'],
   ['/config', 'Configuration'],
 ]
@@ -90,7 +83,7 @@ const Drawer = withStyles(drawerStyles)(
       >
         <div tabIndex={0} role="button" onClick={toggleDrawer}>
           <List className={classes.drawerList}>
-            {DRAWER_NAV_ITEMS.map(([href, text]) => (
+            {SHARED_NAV_ITEMS.map(([href, text]) => (
               <ListItem
                 key={href}
                 button
@@ -156,14 +149,13 @@ const Nav = withStyles(navStyles)(({ authenticated, classes }: NavProps) => {
   return (
     <Typography variant="body1" component="div">
       <List className={classes.horizontalNav}>
-        {NAV_ITEMS.map(([navItemPath, text]) => (
+        {SHARED_NAV_ITEMS.map(([navItemPath, text]) => (
           <ListItem key={navItemPath} className={classes.horizontalNavItem}>
             <BaseLink
-              key={navItemPath}
               href={navItemPath}
               className={classNames(
                 classes.horizontalNavLink,
-                pathname.startsWith(navItemPath) && classes.activeNavLink,
+                pathname.includes(navItemPath) && classes.activeNavLink,
               )}
             >
               {text}
@@ -173,25 +165,20 @@ const Nav = withStyles(navStyles)(({ authenticated, classes }: NavProps) => {
         {/* Feeds Manager link hidden behind a feature flag. This is temporary until we
         enable this for everyone */}
         {isFeedsManagerFeatureEnabled && (
-          <ListItem className={classes.horizontalNavItem}>
-            <BaseLink
-              href={'/feeds_manager'}
-              className={classNames(
-                classes.horizontalNavLink,
-                pathname.includes('/feeds_manager') && classes.activeNavLink,
-              )}
-            >
-              Feeds Manager
-            </BaseLink>
-          </ListItem>
+          <BaseLink
+            href={'/feeds_manager'}
+            className={classNames(
+              classes.horizontalNavLink,
+              pathname.includes('/feeds_manager') && classes.activeNavLink,
+            )}
+          >
+            Feeds Manager
+          </BaseLink>
         )}
         {authenticated && (
-          <>
-            <ListItem className={classes.horizontalNavItem}>
-              <SettingsMenu />
-              <AccountMenu />
-            </ListItem>
-          </>
+          <ListItem className={classes.horizontalNavItem}>
+            <AvatarMenu />
+          </ListItem>
         )}
       </List>
     </Typography>

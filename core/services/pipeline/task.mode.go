@@ -30,7 +30,7 @@ func (t *ModeTask) Type() TaskType {
 	return TaskTypeMode
 }
 
-func (t *ModeTask) Run(_ context.Context, vars Vars, inputs []Result) (result Result, runInfo RunInfo) {
+func (t *ModeTask) Run(_ context.Context, vars Vars, inputs []Result) (result Result) {
 	var (
 		maybeAllowedFaults MaybeUint64Param
 		valuesAndErrs      SliceParam
@@ -42,7 +42,7 @@ func (t *ModeTask) Run(_ context.Context, vars Vars, inputs []Result) (result Re
 		errors.Wrap(ResolveParam(&valuesAndErrs, From(VarExpr(t.Values, vars), JSONWithVarExprs(t.Values, vars, true), Inputs(inputs))), "values"),
 	)
 	if err != nil {
-		return Result{Error: err}, runInfo
+		return Result{Error: err}
 	}
 
 	if allowed, isSet := maybeAllowedFaults.Uint64(); isSet {
@@ -53,9 +53,9 @@ func (t *ModeTask) Run(_ context.Context, vars Vars, inputs []Result) (result Re
 
 	values, faults := valuesAndErrs.FilterErrors()
 	if faults > allowedFaults {
-		return Result{Error: errors.Wrapf(ErrTooManyErrors, "Number of faulty inputs %v to mode task > number allowed faults %v", faults, allowedFaults)}, runInfo
+		return Result{Error: errors.Wrapf(ErrTooManyErrors, "Number of faulty inputs %v to mode task > number allowed faults %v", faults, allowedFaults)}
 	} else if len(values) == 0 {
-		return Result{Error: errors.Wrap(ErrWrongInputCardinality, "values")}, runInfo
+		return Result{Error: errors.Wrap(ErrWrongInputCardinality, "values")}
 	}
 
 	type entry struct {
@@ -87,7 +87,7 @@ func (t *ModeTask) Run(_ context.Context, vars Vars, inputs []Result) (result Re
 		default:
 			bs, err := json.Marshal(v)
 			if err != nil {
-				return Result{Error: errors.Wrapf(ErrBadInput, "could not json stringify value: %v", err)}, runInfo
+				return Result{Error: errors.Wrapf(ErrBadInput, "could not json stringify value: %v", err)}
 			}
 			comparable = string(bs)
 		}
@@ -107,5 +107,5 @@ func (t *ModeTask) Run(_ context.Context, vars Vars, inputs []Result) (result Re
 	return Result{Value: map[string]interface{}{
 		"results":     modes,
 		"occurrences": max,
-	}}, runInfo
+	}}
 }

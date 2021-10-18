@@ -8,7 +8,7 @@ import (
 	"github.com/pkg/errors"
 	"github.com/smartcontractkit/chainlink/core/services/chainlink"
 	"github.com/smartcontractkit/chainlink/core/services/job"
-	"gorm.io/gorm"
+	"github.com/smartcontractkit/chainlink/core/store/orm"
 )
 
 // PipelineJobSpecErrorsController manages PipelineJobSpecError requests
@@ -27,7 +27,7 @@ func (psec *PipelineJobSpecErrorsController) Destroy(c *gin.Context) {
 	}
 
 	err = psec.App.JobORM().DismissError(context.Background(), jobSpec.ID)
-	if errors.Cause(err) == gorm.ErrRecordNotFound {
+	if errors.Cause(err) == orm.ErrorNotFound {
 		jsonAPIError(c, http.StatusNotFound, errors.New("PipelineJobSpecError not found"))
 		return
 	}

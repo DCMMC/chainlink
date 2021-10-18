@@ -2,9 +2,9 @@
 
 pkgs.mkShell {
   nativeBuildInputs = with pkgs; [
-    go_1_17
+    go
 
-    postgresql_13
+    postgresql
     python3
     python3Packages.pip
     curl
@@ -27,7 +27,7 @@ pkgs.mkShell {
     # gofuzz
   ];
   LD_LIBRARY_PATH="${stdenv.cc.cc.lib}/lib64:$LD_LIBRARY_PATH";
-  GOROOT="${pkgs.go_1_17}/share/go";
+  GOROOT="${pkgs.go}/share/go";
 
   PGDATA="db";
 }

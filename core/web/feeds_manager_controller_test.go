@@ -187,10 +187,12 @@ func Test_FeedsManagersController_Show(t *testing.T) {
 }
 
 func setupFeedsManagerTest(t *testing.T) (*cltest.TestApplication, cltest.HTTPClientCleaner) {
-	app := cltest.NewApplication(t)
-	require.NoError(t, app.Start())
+	app, cleanup := cltest.NewApplication(t)
+	t.Cleanup(cleanup)
+	app.Start()
+
 	// We need a CSA key to establish a connection to the FMS
-	app.KeyStore.CSA().Create()
+	app.KeyStore.CSA().CreateCSAKey()
 
 	client := app.NewHTTPClient()
 

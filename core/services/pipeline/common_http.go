@@ -20,49 +20,50 @@ func makeHTTPRequest(
 	requestData MapParam,
 	allowUnrestrictedNetworkAccess BoolParam,
 	cfg Config,
-) ([]byte, int, http.Header, time.Duration, error) {
+) ([]byte, http.Header, time.Duration, error) {
 
 	var bodyReader io.Reader
 	if requestData != nil {
 		bodyBytes, err := json.Marshal(requestData)
 		if err != nil {
-			return nil, 0, nil, 0, errors.Wrap(err, "failed to encode request body as JSON")
+			return nil, nil, 0, errors.Wrap(err, "failed to encode request body as JSON")
 		}
 		bodyReader = bytes.NewReader(bodyBytes)
 	}
 
-	timeoutCtx, cancel := context.WithTimeout(ctx, cfg.DefaultHTTPTimeout().Duration())
-	defer cancel()
-
-	request, err := http.NewRequestWithContext(timeoutCtx, string(method), url.String(), bodyReader)
+	request, err := http.NewRequest(string(method), url.String(), bodyReader)
 	if err != nil {
-		return nil, 0, nil, 0, errors.Wrap(err, "failed to create http.Request")
+		return nil, nil, 0, errors.Wrap(err, "failed to create http.Request")
 	}
 	request.Header.Set("Content-Type", "application/json")
 
+	config := utils.HTTPRequestConfig{
+		Timeout:                        cfg.DefaultHTTPTimeout().Duration(),
+		MaxAttempts:                    cfg.DefaultMaxHTTPAttempts(),
+		SizeLimit:                      cfg.DefaultHTTPLimit(),
+		AllowUnrestrictedNetworkAccess: bool(allowUnrestrictedNetworkAccess),
+	}
+
 	httpRequest := utils.HTTPRequest{
 		Request: request,
-		Config: utils.HTTPRequestConfig{
-			SizeLimit:                      cfg.DefaultHTTPLimit(),
-			AllowUnrestrictedNetworkAccess: bool(allowUnrestrictedNetworkAccess),
-		},
+		Config:  config,
 	}
 
 	start := time.Now()
-	responseBytes, statusCode, headers, err := httpRequest.SendRequest()
-	if ctx.Err() != nil {
-		return nil, 0, nil, 0, errors.New("http request timed out or interrupted")
-	}
+	responseBytes, statusCode, headers, err := httpRequest.SendRequest(ctx)
 	if err != nil {
-		return nil, 0, nil, 0, errors.Wrapf(err, "error making http request")
+		if ctx.Err() != nil {
+			return nil, nil, 0, errors.New("http request timed out or interrupted")
+		}
+		return nil, nil, 0, errors.Wrapf(err, "error making http request")
 	}
-	elapsed := time.Since(start) // TODO: return elapsed from utils/http
+	elapsed := time.Since(start)
 
 	if statusCode >= 400 {
 		maybeErr := bestEffortExtractError(responseBytes)
-		return nil, statusCode, headers, 0, errors.Errorf("got error from %s: (status code %v) %s", url.String(), statusCode, maybeErr)
+		return nil, headers, 0, errors.Errorf("got error from %s: (status code %v) %s", url.String(), statusCode, maybeErr)
 	}
-	return responseBytes, statusCode, headers, elapsed, nil
+	return responseBytes, headers, elapsed, nil
 }
 
 type PossibleErrorResponses struct {

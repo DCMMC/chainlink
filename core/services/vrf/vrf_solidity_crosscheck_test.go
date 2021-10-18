@@ -11,6 +11,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/eth/ethconfig"
 
+	"github.com/ethereum/go-ethereum/accounts/abi/bind/backends"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/stretchr/testify/assert"
@@ -46,7 +47,7 @@ func deployVRFTestHelper(t *testing.T) *solidity_vrf_verifier_wrapper.VRFTestHel
 	auth := cltest.MustNewSimulatedBackendKeyedTransactor(t, key)
 	genesisData := core.GenesisAlloc{auth.From: {Balance: assets.Ether(100)}}
 	gasLimit := ethconfig.Defaults.Miner.GasCeil
-	backend := cltest.NewSimulatedBackend(t, genesisData, gasLimit)
+	backend := backends.NewSimulatedBackend(genesisData, gasLimit)
 	_, _, verifier, err := solidity_vrf_verifier_wrapper.DeployVRFTestHelper(auth, backend)
 	require.NoError(t, err, "failed to deploy VRF contract to simulated blockchain")
 	backend.Commit()
@@ -360,7 +361,7 @@ func TestVRF_MarshalProof(t *testing.T) {
 	for j := 0; j < numSamples(); j++ {
 		sk := randomScalar(t, r)
 		skNum := secp256k1.ToInt(sk)
-		pk := vrfkey.MustNewV2XXXTestingOnly(skNum)
+		pk := vrfkey.NewPrivateKeyXXXTestingOnly(skNum)
 		nonce := randomScalar(t, r)
 		randomSeed := randomUint256(t, r)
 		proof, err := pk.GenerateProofWithNonce(randomSeed, secp256k1.ToInt(nonce))

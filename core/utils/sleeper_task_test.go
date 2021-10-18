@@ -1,6 +1,7 @@
 package utils_test
 
 import (
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -8,11 +9,10 @@ import (
 
 	"github.com/onsi/gomega"
 	"github.com/stretchr/testify/require"
-	"go.uber.org/atomic"
 )
 
 type countingWorker struct {
-	numJobsPerformed atomic.Int32
+	numJobsPerformed int32
 	delay            time.Duration
 }
 
@@ -21,11 +21,11 @@ func (t *countingWorker) Work() {
 		time.Sleep(t.delay)
 	}
 	// Without an atomic, the race detector fails
-	t.numJobsPerformed.Inc()
+	atomic.AddInt32(&t.numJobsPerformed, 1)
 }
 
 func (t *countingWorker) getNumJobsPerformed() int {
-	return int(t.numJobsPerformed.Load())
+	return int(atomic.LoadInt32(&t.numJobsPerformed))
 }
 
 func TestSleeperTask_WakeupAfterStopPanics(t *testing.T) {

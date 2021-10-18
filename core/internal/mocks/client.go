@@ -11,11 +11,11 @@ import (
 
 	context "context"
 
-	eth "github.com/smartcontractkit/chainlink/core/services/eth"
-
 	ethereum "github.com/ethereum/go-ethereum"
 
 	mock "github.com/stretchr/testify/mock"
+
+	models "github.com/smartcontractkit/chainlink/core/store/models"
 
 	rpc "github.com/ethereum/go-ethereum/rpc"
 
@@ -144,20 +144,27 @@ func (_m *Client) CallContract(ctx context.Context, msg ethereum.CallMsg, blockN
 	return r0, r1
 }
 
-// ChainID provides a mock function with given fields:
-func (_m *Client) ChainID() *big.Int {
-	ret := _m.Called()
+// ChainID provides a mock function with given fields: ctx
+func (_m *Client) ChainID(ctx context.Context) (*big.Int, error) {
+	ret := _m.Called(ctx)
 
 	var r0 *big.Int
-	if rf, ok := ret.Get(0).(func() *big.Int); ok {
-		r0 = rf()
+	if rf, ok := ret.Get(0).(func(context.Context) *big.Int); ok {
+		r0 = rf(ctx)
 	} else {
 		if ret.Get(0) != nil {
 			r0 = ret.Get(0).(*big.Int)
 		}
 	}
 
-	return r0
+	var r1 error
+	if rf, ok := ret.Get(1).(func(context.Context) error); ok {
+		r1 = rf(ctx)
+	} else {
+		r1 = ret.Error(1)
+	}
+
+	return r0, r1
 }
 
 // Close provides a mock function with given fields:
@@ -316,15 +323,15 @@ func (_m *Client) GetLINKBalance(linkAddress common.Address, address common.Addr
 }
 
 // HeadByNumber provides a mock function with given fields: ctx, n
-func (_m *Client) HeadByNumber(ctx context.Context, n *big.Int) (*eth.Head, error) {
+func (_m *Client) HeadByNumber(ctx context.Context, n *big.Int) (*models.Head, error) {
 	ret := _m.Called(ctx, n)
 
-	var r0 *eth.Head
-	if rf, ok := ret.Get(0).(func(context.Context, *big.Int) *eth.Head); ok {
+	var r0 *models.Head
+	if rf, ok := ret.Get(0).(func(context.Context, *big.Int) *models.Head); ok {
 		r0 = rf(ctx, n)
 	} else {
 		if ret.Get(0) != nil {
-			r0 = ret.Get(0).(*eth.Head)
+			r0 = ret.Get(0).(*models.Head)
 		}
 	}
 
@@ -426,6 +433,20 @@ func (_m *Client) PendingNonceAt(ctx context.Context, account common.Address) (u
 	return r0, r1
 }
 
+// RoundRobinBatchCallContext provides a mock function with given fields: ctx, b
+func (_m *Client) RoundRobinBatchCallContext(ctx context.Context, b []rpc.BatchElem) error {
+	ret := _m.Called(ctx, b)
+
+	var r0 error
+	if rf, ok := ret.Get(0).(func(context.Context, []rpc.BatchElem) error); ok {
+		r0 = rf(ctx, b)
+	} else {
+		r0 = ret.Error(0)
+	}
+
+	return r0
+}
+
 // SendTransaction provides a mock function with given fields: ctx, tx
 func (_m *Client) SendTransaction(ctx context.Context, tx *types.Transaction) error {
 	ret := _m.Called(ctx, tx)
@@ -464,11 +485,11 @@ func (_m *Client) SubscribeFilterLogs(ctx context.Context, q ethereum.FilterQuer
 }
 
 // SubscribeNewHead provides a mock function with given fields: ctx, ch
-func (_m *Client) SubscribeNewHead(ctx context.Context, ch chan<- *eth.Head) (ethereum.Subscription, error) {
+func (_m *Client) SubscribeNewHead(ctx context.Context, ch chan<- *models.Head) (ethereum.Subscription, error) {
 	ret := _m.Called(ctx, ch)
 
 	var r0 ethereum.Subscription
-	if rf, ok := ret.Get(0).(func(context.Context, chan<- *eth.Head) ethereum.Subscription); ok {
+	if rf, ok := ret.Get(0).(func(context.Context, chan<- *models.Head) ethereum.Subscription); ok {
 		r0 = rf(ctx, ch)
 	} else {
 		if ret.Get(0) != nil {
@@ -477,7 +498,7 @@ func (_m *Client) SubscribeNewHead(ctx context.Context, ch chan<- *eth.Head) (et
 	}
 
 	var r1 error
-	if rf, ok := ret.Get(1).(func(context.Context, chan<- *eth.Head) error); ok {
+	if rf, ok := ret.Get(1).(func(context.Context, chan<- *models.Head) error); ok {
 		r1 = rf(ctx, ch)
 	} else {
 		r1 = ret.Error(1)

@@ -6,21 +6,17 @@ import (
 	"math/big"
 	"time"
 
-	"github.com/shopspring/decimal"
-
 	"github.com/smartcontractkit/chainlink/core/logger"
+
+	"github.com/shopspring/decimal"
 	"github.com/smartcontractkit/chainlink/core/services/pipeline"
 )
 
 // Corresponds with models.d.ts PipelineRun
 type PipelineRunResource struct {
 	JAID
-	Outputs []*string `json:"outputs"`
-	// XXX: Here for backwards compatibility, can be removed later
-	// Deprecated: Errors
+	Outputs      []*string                 `json:"outputs"`
 	Errors       []*string                 `json:"errors"`
-	AllErrors    []*string                 `json:"allErrors"`
-	FatalErrors  []*string                 `json:"fatalErrors"`
 	Inputs       pipeline.JSONSerializable `json:"inputs"`
 	TaskRuns     []PipelineTaskRunResource `json:"taskRuns"`
 	CreatedAt    time.Time                 `json:"createdAt"`
@@ -33,71 +29,56 @@ func (r PipelineRunResource) GetName() string {
 	return "pipelineRun"
 }
 
-func NewPipelineRunResource(pr pipeline.Run, lggr logger.Logger) PipelineRunResource {
-	lggr = lggr.Named("PipelineRunResource")
+func NewPipelineRunResource(pr pipeline.Run) PipelineRunResource {
 	var trs []PipelineTaskRunResource
 	for i := range pr.PipelineTaskRuns {
 		trs = append(trs, NewPipelineTaskRunResource(pr.PipelineTaskRuns[i]))
 	}
 	// The UI expects all outputs to be strings.
 	var outputs []*string
-	// Note for async jobs, Outputs can be nil/invalid
-	if pr.Outputs.Valid {
-		outs, ok := pr.Outputs.Val.([]interface{})
-		if !ok {
-			lggr.Errorw(fmt.Sprintf("Unable to process output type %T", pr.Outputs.Val), "out", pr.Outputs)
-		} else if pr.Outputs.Valid && pr.Outputs.Val != nil {
-			for _, out := range outs {
-				switch v := out.(type) {
-				case string:
-					s := v
-					outputs = append(outputs, &s)
-				case map[string]interface{}:
-					b, _ := json.Marshal(v)
-					bs := string(b)
-					outputs = append(outputs, &bs)
-				case decimal.Decimal:
-					s := v.String()
-					outputs = append(outputs, &s)
-				case *big.Int:
-					s := v.String()
-					outputs = append(outputs, &s)
-				case float64:
-					s := fmt.Sprintf("%f", v)
-					outputs = append(outputs, &s)
-				case nil:
-					outputs = append(outputs, nil)
-				default:
-					lggr.Errorw(fmt.Sprintf("Unable to process output type %T", out), "out", out)
-				}
+	// Note for async jobs, the output can be nil.
+	outs, ok := pr.Outputs.Val.([]interface{})
+	if !ok {
+		logger.Default.Errorw(fmt.Sprintf("PipelineRunResource: unable to process output type %T", pr.Outputs.Val), "out", pr.Outputs)
+	} else if !pr.Outputs.Null && pr.Outputs.Val != nil {
+		for _, out := range outs {
+			switch v := out.(type) {
+			case string:
+				s := v
+				outputs = append(outputs, &s)
+			case map[string]interface{}:
+				b, _ := json.Marshal(v)
+				bs := string(b)
+				outputs = append(outputs, &bs)
+			case decimal.Decimal:
+				s := v.String()
+				outputs = append(outputs, &s)
+			case *big.Int:
+				s := v.String()
+				outputs = append(outputs, &s)
+			case float64:
+				s := fmt.Sprintf("%f", v)
+				outputs = append(outputs, &s)
+			case nil:
+				outputs = append(outputs, nil)
+			default:
+				logger.Default.Errorw(fmt.Sprintf("PipelineRunResource: unable to process output type %T", out), "out", out)
 			}
 		}
 	}
-	var fatalErrors []*string
-	for _, err := range pr.FatalErrors {
+	var errors []*string
+	for _, err := range pr.Errors {
 		if err.Valid {
 			s := err.String
-			fatalErrors = append(fatalErrors, &s)
+			errors = append(errors, &s)
 		} else {
-			fatalErrors = append(fatalErrors, nil)
+			errors = append(errors, nil)
 		}
 	}
-	var allErrors []*string
-	for _, err := range pr.AllErrors {
-		if err.Valid {
-			s := err.String
-			allErrors = append(allErrors, &s)
-		} else {
-			allErrors = append(allErrors, nil)
-		}
-	}
-
 	return PipelineRunResource{
 		JAID:         NewJAIDInt64(pr.ID),
 		Outputs:      outputs,
-		Errors:       fatalErrors,
-		AllErrors:    allErrors,
-		FatalErrors:  fatalErrors,
+		Errors:       errors,
 		Inputs:       pr.Inputs,
 		TaskRuns:     trs,
 		CreatedAt:    pr.CreatedAt,
@@ -123,7 +104,7 @@ func (r PipelineTaskRunResource) GetName() string {
 
 func NewPipelineTaskRunResource(tr pipeline.TaskRun) PipelineTaskRunResource {
 	var output *string
-	if tr.Output.Valid {
+	if tr.Output != nil && !tr.Output.Null {
 		outputBytes, _ := tr.Output.MarshalJSON()
 		outputStr := string(outputBytes)
 		output = &outputStr
@@ -142,11 +123,11 @@ func NewPipelineTaskRunResource(tr pipeline.TaskRun) PipelineTaskRunResource {
 	}
 }
 
-func NewPipelineRunResources(prs []pipeline.Run, lggr logger.Logger) []PipelineRunResource {
+func NewPipelineRunResources(prs []pipeline.Run) []PipelineRunResource {
 	var out []PipelineRunResource
 
 	for _, pr := range prs {
-		out = append(out, NewPipelineRunResource(pr, lggr))
+		out = append(out, NewPipelineRunResource(pr))
 	}
 
 	return out

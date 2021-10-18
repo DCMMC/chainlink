@@ -11,12 +11,10 @@ import (
 	"github.com/pkg/errors"
 	uuid "github.com/satori/go.uuid"
 	"github.com/shopspring/decimal"
-	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"gopkg.in/guregu/null.v4"
 
 	"github.com/smartcontractkit/chainlink/core/internal/cltest"
-	"github.com/smartcontractkit/chainlink/core/internal/testutils/pgtest"
 	"github.com/smartcontractkit/chainlink/core/services/pipeline"
 	"github.com/smartcontractkit/chainlink/core/store/models"
 	"github.com/smartcontractkit/chainlink/core/utils"
@@ -29,7 +27,9 @@ import (
 func TestHTTPTask_Happy(t *testing.T) {
 	t.Parallel()
 
-	config := cltest.NewTestGeneralConfig(t)
+	config, cleanup := cltest.NewConfig(t)
+	defer cleanup()
+
 	s1 := httptest.NewServer(fakePriceResponder(t, utils.MustUnmarshalToMap(btcUSDPairing), decimal.NewFromInt(9700), "", nil))
 	defer s1.Close()
 
@@ -41,9 +41,7 @@ func TestHTTPTask_Happy(t *testing.T) {
 	}
 	task.HelperSetDependencies(config)
 
-	result, runInfo := task.Run(context.Background(), pipeline.NewVarsFrom(nil), nil)
-	assert.False(t, runInfo.IsPending)
-	assert.False(t, runInfo.IsRetryable)
+	result := task.Run(context.Background(), pipeline.NewVarsFrom(nil), nil)
 	require.NoError(t, result.Error)
 	require.NotNil(t, result.Value)
 	var x struct {
@@ -73,7 +71,7 @@ func TestHTTPTask_Variables(t *testing.T) {
 		{
 			"requestData (empty) + meta",
 			``,
-			pipeline.JSONSerializable{validMeta, true},
+			pipeline.JSONSerializable{validMeta, false},
 			[]pipeline.Result{{Value: 123.45}},
 			pipeline.NewVarsFrom(map[string]interface{}{"some_data": map[string]interface{}{"foo": 543.21}}),
 			map[string]interface{}{},
@@ -83,7 +81,7 @@ func TestHTTPTask_Variables(t *testing.T) {
 		{
 			"requestData (pure variable) + meta",
 			`$(some_data)`,
-			pipeline.JSONSerializable{validMeta, true},
+			pipeline.JSONSerializable{validMeta, false},
 			[]pipeline.Result{{Value: 123.45}},
 			pipeline.NewVarsFrom(map[string]interface{}{"some_data": map[string]interface{}{"foo": 543.21}}),
 			map[string]interface{}{"foo": 543.21},
@@ -93,7 +91,7 @@ func TestHTTPTask_Variables(t *testing.T) {
 		{
 			"requestData (pure variable)",
 			`$(some_data)`,
-			pipeline.JSONSerializable{nil, false},
+			pipeline.JSONSerializable{nil, true},
 			[]pipeline.Result{{Value: 123.45}},
 			pipeline.NewVarsFrom(map[string]interface{}{"some_data": map[string]interface{}{"foo": 543.21}}),
 			map[string]interface{}{"foo": 543.21},
@@ -103,7 +101,7 @@ func TestHTTPTask_Variables(t *testing.T) {
 		{
 			"requestData (pure variable, missing)",
 			`$(some_data)`,
-			pipeline.JSONSerializable{validMeta, true},
+			pipeline.JSONSerializable{validMeta, false},
 			[]pipeline.Result{{Value: 123.45}},
 			pipeline.NewVarsFrom(map[string]interface{}{"not_some_data": map[string]interface{}{"foo": 543.21}}),
 			nil,
@@ -113,7 +111,7 @@ func TestHTTPTask_Variables(t *testing.T) {
 		{
 			"requestData (pure variable, not a map)",
 			`$(some_data)`,
-			pipeline.JSONSerializable{validMeta, true},
+			pipeline.JSONSerializable{validMeta, false},
 			[]pipeline.Result{{Value: 123.45}},
 			pipeline.NewVarsFrom(map[string]interface{}{"some_data": 543.21}),
 			nil,
@@ -123,7 +121,7 @@ func TestHTTPTask_Variables(t *testing.T) {
 		{
 			"requestData (interpolation) + meta",
 			`{"data":{"result":$(medianize)}}`,
-			pipeline.JSONSerializable{validMeta, true},
+			pipeline.JSONSerializable{validMeta, false},
 			[]pipeline.Result{{Value: 123.45}},
 			pipeline.NewVarsFrom(map[string]interface{}{"medianize": 543.21}),
 			map[string]interface{}{"data": map[string]interface{}{"result": 543.21}},
@@ -133,7 +131,7 @@ func TestHTTPTask_Variables(t *testing.T) {
 		{
 			"requestData (interpolation, missing)",
 			`{"data":{"result":$(medianize)}}`,
-			pipeline.JSONSerializable{validMeta, true},
+			pipeline.JSONSerializable{validMeta, false},
 			[]pipeline.Result{{Value: 123.45}},
 			pipeline.NewVarsFrom(map[string]interface{}{"nope": "foo bar"}),
 			nil,
@@ -148,8 +146,8 @@ func TestHTTPTask_Variables(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			t.Parallel()
 
-			db := pgtest.NewGormDB(t)
-			cfg := cltest.NewTestGeneralConfig(t)
+			store, cleanup := cltest.NewStore(t)
+			defer cleanup()
 
 			s1 := httptest.NewServer(fakePriceResponder(t, test.expectedRequestData, decimal.NewFromInt(9700), "", nil))
 			defer s1.Close()
@@ -163,17 +161,15 @@ func TestHTTPTask_Variables(t *testing.T) {
 				Name:        "foo",
 				RequestData: test.requestData,
 			}
-			task.HelperSetDependencies(cfg, db, uuid.UUID{})
+			task.HelperSetDependencies(store.Config, store.DB, uuid.UUID{})
 
 			// Insert bridge
 			_, bridge := cltest.NewBridgeType(t, task.Name)
 			bridge.URL = *feedWebURL
-			require.NoError(t, db.Create(&bridge).Error)
+			require.NoError(t, store.ORM.DB.Create(&bridge).Error)
 
 			test.vars.Set("meta", test.meta)
-			result, runInfo := task.Run(context.Background(), test.vars, test.inputs)
-			assert.False(t, runInfo.IsPending)
-			assert.False(t, runInfo.IsRetryable)
+			result := task.Run(context.Background(), test.vars, test.inputs)
 			if test.expectedErrorCause != nil {
 				require.Equal(t, test.expectedErrorCause, errors.Cause(result.Error))
 				if test.expectedErrorContains != "" {
@@ -198,7 +194,9 @@ func TestHTTPTask_Variables(t *testing.T) {
 func TestHTTPTask_OverrideURLSafe(t *testing.T) {
 	t.Parallel()
 
-	config := cltest.NewTestGeneralConfig(t)
+	config, cleanup := cltest.NewConfig(t)
+	defer cleanup()
+
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
@@ -216,33 +214,29 @@ func TestHTTPTask_OverrideURLSafe(t *testing.T) {
 	}
 	task.HelperSetDependencies(config)
 
-	result, runInfo := task.Run(context.Background(), pipeline.NewVarsFrom(nil), nil)
-	assert.False(t, runInfo.IsPending)
-	assert.False(t, runInfo.IsRetryable)
+	result := task.Run(context.Background(), pipeline.NewVarsFrom(nil), nil)
 	require.NoError(t, result.Error)
 
 	task.URL = "$(url)"
 
 	vars := pipeline.NewVarsFrom(map[string]interface{}{"url": server.URL})
-	result, runInfo = task.Run(context.Background(), vars, nil)
-	assert.False(t, runInfo.IsPending)
-	assert.True(t, runInfo.IsRetryable)
+	result = task.Run(context.Background(), vars, nil)
 	require.Error(t, result.Error)
 	require.Contains(t, result.Error.Error(), "Connections to local/private and multicast networks are disabled")
 	require.Nil(t, result.Value)
 
 	task.AllowUnrestrictedNetworkAccess = "true"
 
-	result, runInfo = task.Run(context.Background(), vars, nil)
-	assert.False(t, runInfo.IsPending)
-	assert.False(t, runInfo.IsRetryable)
+	result = task.Run(context.Background(), vars, nil)
 	require.NoError(t, result.Error)
 }
 
 func TestHTTPTask_ErrorMessage(t *testing.T) {
 	t.Parallel()
 
-	config := cltest.NewTestGeneralConfig(t)
+	config, cleanup := cltest.NewConfig(t)
+	defer cleanup()
+
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusTooManyRequests)
@@ -262,10 +256,7 @@ func TestHTTPTask_ErrorMessage(t *testing.T) {
 	}
 	task.HelperSetDependencies(config)
 
-	result, runInfo := task.Run(context.Background(), pipeline.NewVarsFrom(nil), nil)
-	assert.False(t, runInfo.IsPending)
-	assert.False(t, runInfo.IsRetryable)
-
+	result := task.Run(context.Background(), pipeline.NewVarsFrom(nil), nil)
 	require.Error(t, result.Error)
 	require.Contains(t, result.Error.Error(), "could not hit data fetcher")
 	require.Nil(t, result.Value)
@@ -274,7 +265,9 @@ func TestHTTPTask_ErrorMessage(t *testing.T) {
 func TestHTTPTask_OnlyErrorMessage(t *testing.T) {
 	t.Parallel()
 
-	config := cltest.NewTestGeneralConfig(t)
+	config, cleanup := cltest.NewConfig(t)
+	defer cleanup()
+
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusBadGateway)
@@ -292,9 +285,7 @@ func TestHTTPTask_OnlyErrorMessage(t *testing.T) {
 	}
 	task.HelperSetDependencies(config)
 
-	result, runInfo := task.Run(context.Background(), pipeline.NewVarsFrom(nil), nil)
-	assert.False(t, runInfo.IsPending)
-	assert.True(t, runInfo.IsRetryable)
+	result := task.Run(context.Background(), pipeline.NewVarsFrom(nil), nil)
 	require.Error(t, result.Error)
 	require.Contains(t, result.Error.Error(), "RequestId")
 	require.Nil(t, result.Value)

@@ -1,36 +1,31 @@
 package offchainreporting
 
 import (
-	"math/big"
 	"time"
 
 	"github.com/multiformats/go-multiaddr"
 	"github.com/pelletier/go-toml"
 	"github.com/pkg/errors"
-	"github.com/smartcontractkit/chainlink/core/chains"
-	"github.com/smartcontractkit/libocr/offchainreporting"
-	"go.uber.org/multierr"
-
-	"github.com/smartcontractkit/chainlink/core/chains/evm"
 	"github.com/smartcontractkit/chainlink/core/services/job"
+	"github.com/DCMMC/libocr/offchainreporting"
+	"github.com/DCMMC/libocr/offchainreporting/types"
+	"go.uber.org/multierr"
 )
 
 type ValidationConfig interface {
-	ChainID() *big.Int
 	Dev() bool
-	OCRBlockchainTimeout() time.Duration
-	OCRContractConfirmations() uint16
-	OCRContractPollInterval() time.Duration
-	OCRContractSubscribeInterval() time.Duration
+	OCRBlockchainTimeout(override time.Duration) time.Duration
+	OCRContractConfirmations(override uint16) uint16
+	OCRContractPollInterval(override time.Duration) time.Duration
+	OCRContractSubscribeInterval(override time.Duration) time.Duration
 	OCRContractTransmitterTransmitTimeout() time.Duration
 	OCRDatabaseTimeout() time.Duration
-	OCRObservationTimeout() time.Duration
+	OCRObservationTimeout(override time.Duration) time.Duration
 	OCRObservationGracePeriod() time.Duration
-	ChainType() chains.ChainType
 }
 
 // ValidatedOracleSpecToml validates an oracle spec that came from TOML
-func ValidatedOracleSpecToml(chainSet evm.ChainSet, tomlString string) (job.Job, error) {
+func ValidatedOracleSpecToml(config ValidationConfig, tomlString string) (job.Job, error) {
 	var jb = job.Job{}
 	var spec job.OffchainReportingOracleSpec
 	tree, err := toml.Load(tomlString)
@@ -57,24 +52,18 @@ func ValidatedOracleSpecToml(chainSet evm.ChainSet, tomlString string) (job.Job,
 		return jb, errors.New("isBootstrapPeer is not defined")
 	}
 	for i := range spec.P2PBootstrapPeers {
-		if _, err = multiaddr.NewMultiaddr(spec.P2PBootstrapPeers[i]); err != nil {
+		if _, err := multiaddr.NewMultiaddr(spec.P2PBootstrapPeers[i]); err != nil {
 			return jb, errors.Wrapf(err, "p2p bootstrap peer %v is invalid", spec.P2PBootstrapPeers[i])
 		}
 	}
-
-	chain, err := chainSet.Get(jb.OffchainreportingOracleSpec.EVMChainID.ToInt())
-	if err != nil {
-		return jb, err
-	}
-
 	if spec.IsBootstrapPeer {
 		if err := validateBootstrapSpec(tree, jb); err != nil {
 			return jb, err
 		}
-	} else if err := validateNonBootstrapSpec(tree, chain.Config(), jb); err != nil {
+	} else if err := validateNonBootstrapSpec(tree, config, jb); err != nil {
 		return jb, err
 	}
-	if err := validateTimingParameters(chain.Config(), spec); err != nil {
+	if err := validateTimingParameters(config, spec); err != nil {
 		return jb, err
 	}
 	return jb, nil
@@ -105,9 +94,22 @@ func cloneSet(in map[string]struct{}) map[string]struct{} {
 	return out
 }
 
-func validateTimingParameters(cfg ValidationConfig, spec job.OffchainReportingOracleSpec) error {
-	lc := NewLocalConfig(cfg, spec)
-	return errors.Wrap(offchainreporting.SanityCheckLocalConfig(lc), "offchainreporting.SanityCheckLocalConfig failed")
+func validateTimingParameters(config ValidationConfig, spec job.OffchainReportingOracleSpec) error {
+	lc := types.LocalConfig{
+		BlockchainTimeout:                      config.OCRBlockchainTimeout(time.Duration(spec.BlockchainTimeout)),
+		ContractConfigConfirmations:            config.OCRContractConfirmations(spec.ContractConfigConfirmations),
+		ContractConfigTrackerPollInterval:      config.OCRContractPollInterval(time.Duration(spec.ContractConfigTrackerPollInterval)),
+		ContractConfigTrackerSubscribeInterval: config.OCRContractSubscribeInterval(time.Duration(spec.ContractConfigTrackerSubscribeInterval)),
+		ContractTransmitterTransmitTimeout:     config.OCRContractTransmitterTransmitTimeout(),
+		DatabaseTimeout:                        config.OCRDatabaseTimeout(),
+		DataSourceTimeout:                      config.OCRObservationTimeout(time.Duration(spec.ObservationTimeout)),
+		DataSourceGracePeriod:                  config.OCRObservationGracePeriod(),
+	}
+	if config.Dev() {
+		lc.DevelopmentMode = types.EnableDangerousDevelopmentMode
+	}
+
+	return offchainreporting.SanityCheckLocalConfig(lc)
 }
 
 func validateBootstrapSpec(tree *toml.Tree, spec job.Job) error {
@@ -129,12 +131,7 @@ func validateNonBootstrapSpec(tree *toml.Tree, config ValidationConfig, spec job
 	if spec.Pipeline.Source == "" {
 		return errors.New("no pipeline specified")
 	}
-	var observationTimeout time.Duration
-	if spec.OffchainreportingOracleSpec.ObservationTimeout != 0 {
-		observationTimeout = spec.OffchainreportingOracleSpec.ObservationTimeout.Duration()
-	} else {
-		observationTimeout = config.OCRObservationTimeout()
-	}
+	observationTimeout := config.OCRObservationTimeout(time.Duration(spec.OffchainreportingOracleSpec.ObservationTimeout))
 	if time.Duration(spec.MaxTaskDuration) > observationTimeout {
 		return errors.Errorf("max task duration must be < observation timeout")
 	}

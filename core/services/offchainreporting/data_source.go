@@ -5,14 +5,14 @@ import (
 	"math/big"
 	"time"
 
-	"github.com/smartcontractkit/chainlink/core/bridges"
+	"github.com/smartcontractkit/chainlink/core/store/models"
 
 	"github.com/pkg/errors"
 	"github.com/smartcontractkit/chainlink/core/logger"
 	"github.com/smartcontractkit/chainlink/core/services/job"
 	"github.com/smartcontractkit/chainlink/core/services/pipeline"
 	"github.com/smartcontractkit/chainlink/core/utils"
-	ocrtypes "github.com/smartcontractkit/libocr/offchainreporting/types"
+	ocrtypes "github.com/DCMMC/libocr/offchainreporting/types"
 )
 
 // dataSource is an abstraction over the process of initiating a pipeline run
@@ -23,8 +23,8 @@ type dataSource struct {
 	jobSpec               job.Job
 	spec                  pipeline.Spec
 	ocrLogger             logger.Logger
-	runResults            chan<- pipeline.Run
-	currentBridgeMetadata bridges.BridgeMetaData
+	runResults            chan<- pipeline.RunWithResults
+	currentBridgeMetadata models.BridgeMetaData
 }
 
 var _ ocrtypes.DataSource = (*dataSource)(nil)
@@ -33,7 +33,7 @@ var _ ocrtypes.DataSource = (*dataSource)(nil)
 // Upon context cancellation, its expected that we return any usable values within ObservationGracePeriod.
 func (ds *dataSource) Observe(ctx context.Context) (ocrtypes.Observation, error) {
 	var observation ocrtypes.Observation
-	md, err := bridges.MarshalBridgeMetaData(ds.currentBridgeMetadata.LatestAnswer, ds.currentBridgeMetadata.UpdatedAt)
+	md, err := models.MarshalBridgeMetaData(ds.currentBridgeMetadata.LatestAnswer, ds.currentBridgeMetadata.UpdatedAt)
 	if err != nil {
 		logger.Warnw("unable to attach metadata for run", "err", err)
 	}
@@ -62,7 +62,10 @@ func (ds *dataSource) Observe(ctx context.Context) (ocrtypes.Observation, error)
 	// immediately return any result we have and do not want to have
 	// a db write block that.
 	select {
-	case ds.runResults <- run:
+	case ds.runResults <- pipeline.RunWithResults{
+		Run:            run,
+		TaskRunResults: trrs,
+	}:
 	default:
 		return nil, errors.Errorf("unable to enqueue run save for job ID %v, buffer full", ds.spec.JobID)
 	}
@@ -80,7 +83,7 @@ func (ds *dataSource) Observe(ctx context.Context) (ocrtypes.Observation, error)
 	if err != nil {
 		return nil, errors.Wrap(err, "cannot convert observation to decimal")
 	}
-	ds.currentBridgeMetadata = bridges.BridgeMetaData{
+	ds.currentBridgeMetadata = models.BridgeMetaData{
 		LatestAnswer: asDecimal.BigInt(),
 		UpdatedAt:    big.NewInt(time.Now().Unix()),
 	}

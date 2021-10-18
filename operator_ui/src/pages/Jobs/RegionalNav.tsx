@@ -1,7 +1,8 @@
 import React, { useMemo, useCallback, useState, useRef } from 'react'
-import { connect, useDispatch } from 'react-redux'
+import { connect } from 'react-redux'
 import { Redirect, useLocation } from 'react-router-dom'
 
+import { localizedTimestamp, TimeAgo } from 'components/TimeAgo'
 import Card from '@material-ui/core/Card'
 import Dialog from '@material-ui/core/Dialog'
 import Grid from '@material-ui/core/Grid'
@@ -16,19 +17,19 @@ import {
   WithStyles,
 } from '@material-ui/core/styles'
 import Typography from '@material-ui/core/Typography'
+import { ApiResponse } from 'utils/json-api-client'
+import { JobSpec } from 'core/store/models'
 import classNames from 'classnames'
 
-import { localizedTimestamp, TimeAgo } from 'components/TimeAgo'
-import * as api from 'api'
-import { createJobRunV2 } from 'actionCreators'
+import { createJobRun, createJobRunV2, deleteJobSpec } from 'actionCreators'
 import BaseLink from 'components/BaseLink'
 import Button from 'components/Button'
 import CopyJobSpec from 'components/CopyJobSpec'
 import Close from 'components/Icons/Close'
 import Link from 'components/Link'
 import ErrorMessage from 'components/Notifications/DefaultError'
-import { notifySuccess, notifyError } from 'actionCreators'
 import { JobData } from './sharedTypes'
+import { isJobV2 } from 'pages/Jobs/utils'
 
 const styles = (theme: Theme) =>
   createStyles({
@@ -120,6 +121,10 @@ const styles = (theme: Theme) =>
     },
   })
 
+const isWebInitiator = (
+  initiators: ApiResponse<JobSpec>['data']['attributes']['initiators'],
+) => initiators.find((initiator) => initiator.type === 'web')
+
 const CreateRunSuccessNotification = ({ data }: any) => (
   <React.Fragment>
     Successfully created job run{' '}
@@ -129,12 +134,15 @@ const CreateRunSuccessNotification = ({ data }: any) => (
   </React.Fragment>
 )
 
-const DeleteSuccessNotification = ({ id }: { id: string }) => (
+const DeleteSuccessNotification = ({ id }: any) => (
   <React.Fragment>Successfully deleted job {id}</React.Fragment>
 )
+
 interface Props extends WithStyles<typeof styles> {
+  createJobRun: Function
   createJobRunV2: Function
-  jobId: string
+  deleteJobSpec: Function
+  jobSpecId: string
   externalJobID?: string
   job: JobData['job']
   runsCount: JobData['recentRunsCount']
@@ -143,14 +151,15 @@ interface Props extends WithStyles<typeof styles> {
 
 const RegionalNavComponent = ({
   classes,
+  createJobRun,
   createJobRunV2,
-  jobId,
+  jobSpecId,
   job,
+  deleteJobSpec,
   getJobSpecRuns,
   runsCount,
   externalJobID,
 }: Props) => {
-  const dispatch = useDispatch()
   const location = useLocation()
   const navErrorsActive = location.pathname.endsWith('/errors')
   const navDefinitionActive = location.pathname.endsWith('/definition')
@@ -166,33 +175,60 @@ const RegionalNavComponent = ({
     const page = params.get('page')
     const size = params.get('size')
 
-    await createJobRunV2(
-      externalJobID || jobId,
-      pipelineInput,
-      CreateRunSuccessNotification,
-      ErrorMessage,
-    )
-
+    if (job?.id && isJobV2(job.id)) {
+      await createJobRunV2(
+        externalJobID || jobSpecId,
+        pipelineInput,
+        CreateRunSuccessNotification,
+        ErrorMessage,
+      )
+    } else {
+      await createJobRun(jobSpecId, CreateRunSuccessNotification, ErrorMessage)
+    }
     await getJobSpecRuns({
       page: page ? parseInt(page, 10) : undefined,
       size: size ? parseInt(size, 10) : undefined,
     })
   }
-
-  const handleDelete = async (id: string) => {
-    try {
-      await api.v2.jobs.destroyJobSpec(id)
-      setDeleted(true)
-      dispatch(notifySuccess(DeleteSuccessNotification, { id }))
-    } catch (e: any) {
-      dispatch(notifyError(ErrorMessage, e))
-
-      setModalOpen(false)
-    }
+  const handleDelete = (id: string) => {
+    deleteJobSpec(
+      id,
+      () => DeleteSuccessNotification({ id }),
+      ErrorMessage,
+      job?.type,
+    )
+    setDeleted(true)
   }
 
   const typeDetail = useMemo(() => {
-    return job ? job.specType : 'Unknown job type'
+    let type = 'unknown'
+
+    if (!job) {
+      return 'Unknown job type'
+    }
+
+    if (job.type === 'v2') {
+      switch (job.specType) {
+        case 'offchainreporting':
+          type = 'Off-chain reporting'
+          break
+        case 'keeper':
+          type = 'Keeper'
+          break
+        case 'cron':
+          type = 'Cron'
+          break
+        case 'webhook':
+          type = 'Webhook'
+          break
+        default:
+          type = 'Direct request'
+      }
+    } else {
+      type = job.type
+    }
+
+    return `${type} job spec detail`
   }, [job])
 
   const toggleRunJobModal = useCallback(() => {
@@ -246,8 +282,11 @@ const RegionalNavComponent = ({
               </Grid>
               <Grid container spacing={0} alignItems="center" justify="center">
                 <Grid item className={classes.deleteButton}>
-                  <Button variant="danger" onClick={() => handleDelete(jobId)}>
-                    Delete {jobId}
+                  <Button
+                    variant="danger"
+                    onClick={() => handleDelete(jobSpecId)}
+                  >
+                    Delete {jobSpecId}
                     {deleted && <Redirect to="/" />}
                   </Button>
                 </Grid>
@@ -260,6 +299,13 @@ const RegionalNavComponent = ({
       <Card className={classes.container}>
         <Grid container spacing={0}>
           <Grid item xs={12}>
+            {job && (
+              <Typography variant="subtitle2" color="secondary" gutterBottom>
+                {typeDetail}
+              </Typography>
+            )}
+          </Grid>
+          <Grid item xs={12}>
             <Grid
               container
               spacing={0}
@@ -269,21 +315,11 @@ const RegionalNavComponent = ({
               <Grid item xs={6}>
                 {job && (
                   <Typography
-                    variant="h5"
+                    variant="h3"
                     color="secondary"
                     className={classes.jobSpecId}
                   >
-                    {job.name || jobId}
-                  </Typography>
-                )}
-
-                {job && (
-                  <Typography
-                    variant="subtitle2"
-                    color="secondary"
-                    gutterBottom
-                  >
-                    {typeDetail}
+                    {job.name || jobSpecId}
                   </Typography>
                 )}
               </Grid>
@@ -296,7 +332,10 @@ const RegionalNavComponent = ({
                     >
                       Delete
                     </Button>
-                    {job.specType == 'webhook' && (
+                    {((job.type === 'Direct request' &&
+                      job.initiators &&
+                      isWebInitiator(job.initiators)) ||
+                      (job.type == 'v2' && job.specType == 'webhook')) && (
                       <React.Fragment>
                         <Button
                           onClick={toggleRunJobModal}
@@ -351,7 +390,7 @@ const RegionalNavComponent = ({
             <List className={classes.horizontalNav}>
               <ListItem className={classes.horizontalNavItem}>
                 <Link
-                  href={`/jobs/${jobId}`}
+                  href={`/jobs/${jobSpecId}`}
                   className={classNames(
                     classes.horizontalNavLink,
                     navOverviewActive && classes.activeNavLink,
@@ -362,7 +401,7 @@ const RegionalNavComponent = ({
               </ListItem>
               <ListItem className={classes.horizontalNavItem}>
                 <Link
-                  href={`/jobs/${jobId}/definition`}
+                  href={`/jobs/${jobSpecId}/definition`}
                   className={classNames(
                     classes.horizontalNavLink,
                     navDefinitionActive && classes.activeNavLink,
@@ -373,7 +412,7 @@ const RegionalNavComponent = ({
               </ListItem>
               <ListItem className={classes.horizontalNavItem}>
                 <Link
-                  href={`/jobs/${jobId}/errors`}
+                  href={`/jobs/${jobSpecId}/errors`}
                   className={classNames(
                     classes.horizontalNavLink,
                     navErrorsActive && classes.activeNavLink,
@@ -394,7 +433,7 @@ const RegionalNavComponent = ({
               </ListItem>
               <ListItem className={classes.horizontalNavItem}>
                 <Link
-                  href={`/jobs/${jobId}/runs`}
+                  href={`/jobs/${jobSpecId}/runs`}
                   className={classNames(
                     classes.horizontalNavLink,
                     navRunsActive && classes.activeNavLink,
@@ -482,7 +521,9 @@ const RunJobModal = (props: {
 }
 
 export const ConnectedRegionalNav = connect(null, {
+  createJobRun,
   createJobRunV2,
+  deleteJobSpec,
 })(RegionalNavComponent)
 
 export const RegionalNav = withStyles(styles)(ConnectedRegionalNav)

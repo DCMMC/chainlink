@@ -19,7 +19,6 @@ import Card from '@material-ui/core/Card'
 import CardContent from '@material-ui/core/CardContent'
 import CardHeader from '@material-ui/core/CardHeader'
 import Grid from '@material-ui/core/Grid'
-import { EditJobSpecDialog, FormValues } from './EditJobSpecDialog'
 
 interface RouteParams {
   id: string
@@ -31,8 +30,6 @@ export const JobProposalScreen = () => {
   const [proposal, setProposal] = React.useState<Resource<JobProposal>>()
   const [confirmApprove, setConfirmApprove] = React.useState(false)
   const [confirmReject, setConfirmReject] = React.useState(false)
-  const [confirmCancel, setConfirmCancel] = React.useState(false)
-  const [isEditing, setIsEditing] = React.useState(false)
   const { error, ErrorComponent, setError } = useErrorHandler()
   const { LoadingPlaceholder } = useLoadingPlaceholder(!error && !proposal)
 
@@ -71,83 +68,6 @@ export const JobProposalScreen = () => {
       .finally(() => setConfirmApprove(false))
   }
 
-  const handleCancel = () => {
-    v2.jobProposals
-      .cancelJobProposal(id)
-      .then((res) => {
-        setProposal(res.data)
-        dispatch(notifySuccess(() => <>Job Proposal was cancelled</>, {}))
-      })
-      .catch((e) => {
-        dispatch(notifyError(ErrorMessage, e))
-      })
-      .finally(() => setConfirmCancel(false))
-  }
-
-  const handleUpdateJobSpecSubmit = ({ spec }: FormValues) => {
-    return v2.jobProposals
-      .updateJobProposalSpec(id, { spec })
-      .then((res) => {
-        setProposal(res.data)
-        dispatch(notifySuccess(() => <>Spec was updated</>, {}))
-        setIsEditing(false)
-      })
-      .catch((e) => {
-        dispatch(notifyError(ErrorMessage, e))
-      })
-  }
-
-  const renderActions = () => {
-    if (!proposal) {
-      return null
-    }
-
-    switch (proposal.attributes.status) {
-      case 'pending':
-        return (
-          <>
-            <Button
-              variant="text"
-              color="secondary"
-              onClick={() => setConfirmReject(true)}
-            >
-              Reject
-            </Button>
-            <Button
-              variant="contained"
-              color="primary"
-              onClick={() => setConfirmApprove(true)}
-            >
-              Approve
-            </Button>
-          </>
-        )
-      case 'approved':
-        return (
-          <>
-            <Button variant="contained" onClick={() => setConfirmCancel(true)}>
-              Cancel
-            </Button>
-          </>
-        )
-      case 'cancelled':
-        return (
-          <>
-            <Button
-              variant="contained"
-              color="primary"
-              onClick={() => setConfirmApprove(true)}
-            >
-              Approve
-            </Button>
-          </>
-        )
-
-      default:
-        return null
-    }
-  }
-
   return (
     <Content>
       <Grid container>
@@ -160,23 +80,34 @@ export const JobProposalScreen = () => {
               <CardHeader
                 title={`Job proposal #${proposal?.id}`}
                 subheader={`Status: ${titleize(proposal.attributes.status)}`}
-                action={renderActions()}
+                action={
+                  proposal.attributes.status === 'pending' && (
+                    <>
+                      <Button
+                        variant="text"
+                        color="secondary"
+                        onClick={() => setConfirmReject(true)}
+                      >
+                        Reject
+                      </Button>
+                      <Button
+                        variant="contained"
+                        color="primary"
+                        onClick={() => setConfirmApprove(true)}
+                      >
+                        Approve
+                      </Button>
+                    </>
+                  )
+                }
               />
 
               <CardContent>
-                <SyntaxHighlighter language="toml" style={prism}>
-                  {proposal.attributes.spec}
-                </SyntaxHighlighter>
-
-                {proposal.attributes.status === 'pending' ||
-                  (proposal.attributes.status === 'cancelled' && (
-                    <Button
-                      variant="contained"
-                      onClick={() => setIsEditing(true)}
-                    >
-                      Edit job spec
-                    </Button>
-                  ))}
+                <div>
+                  <SyntaxHighlighter language="toml" style={prism}>
+                    {proposal.attributes.spec}
+                  </SyntaxHighlighter>
+                </div>
               </CardContent>
             </Card>
           )}
@@ -201,24 +132,6 @@ export const JobProposalScreen = () => {
         cancelButtonText="Cancel"
         onCancel={() => setConfirmReject(false)}
       />
-
-      <ConfirmationDialog
-        open={confirmCancel}
-        title="Cancel Job Proposal"
-        body="Cancelling this job proposal will delete the running job. Are you sure you want to cancel this job proposal?"
-        onConfirm={handleCancel}
-        cancelButtonText="Cancel"
-        onCancel={() => setConfirmCancel(false)}
-      />
-
-      {proposal && (
-        <EditJobSpecDialog
-          open={isEditing}
-          onClose={() => setIsEditing(false)}
-          initialValues={{ spec: proposal.attributes.spec }}
-          onSubmit={handleUpdateJobSpecSubmit}
-        />
-      )}
     </Content>
   )
 }

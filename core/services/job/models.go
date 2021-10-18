@@ -6,21 +6,20 @@ import (
 	"strings"
 	"time"
 
+	"github.com/smartcontractkit/chainlink/core/utils"
+
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/lib/pq"
 	uuid "github.com/satori/go.uuid"
-	"gopkg.in/guregu/null.v4"
-	"gorm.io/gorm"
-
 	"github.com/smartcontractkit/chainlink/core/assets"
-	"github.com/smartcontractkit/chainlink/core/bridges"
 	clnull "github.com/smartcontractkit/chainlink/core/null"
 	"github.com/smartcontractkit/chainlink/core/services/keystore/keys/ethkey"
 	"github.com/smartcontractkit/chainlink/core/services/keystore/keys/p2pkey"
 	"github.com/smartcontractkit/chainlink/core/services/pipeline"
 	"github.com/smartcontractkit/chainlink/core/services/signatures/secp256k1"
 	"github.com/smartcontractkit/chainlink/core/store/models"
-	"github.com/smartcontractkit/chainlink/core/utils"
+	"gopkg.in/guregu/null.v4"
+	"gorm.io/gorm"
 )
 
 const (
@@ -48,37 +47,24 @@ func (t Type) SupportsAsync() bool {
 	return supportsAsync[t]
 }
 
-func (t Type) SchemaVersion() uint32 {
-	return schemaVersions[t]
-}
-
 var (
 	requiresPipelineSpec = map[Type]bool{
 		Cron:              true,
 		DirectRequest:     true,
 		FluxMonitor:       true,
 		OffchainReporting: false, // bootstrap jobs do not require it
-		Keeper:            true,
+		Keeper:            false,
 		VRF:               true,
 		Webhook:           true,
 	}
 	supportsAsync = map[Type]bool{
-		Cron:              true,
-		DirectRequest:     true,
+		Cron:              false,
+		DirectRequest:     false,
 		FluxMonitor:       false,
 		OffchainReporting: false,
-		Keeper:            true,
-		VRF:               true,
+		Keeper:            false,
+		VRF:               false,
 		Webhook:           true,
-	}
-	schemaVersions = map[Type]uint32{
-		Cron:              1,
-		DirectRequest:     1,
-		FluxMonitor:       1,
-		OffchainReporting: 1,
-		Keeper:            2,
-		VRF:               1,
-		Webhook:           1,
 	}
 )
 
@@ -109,25 +95,17 @@ type Job struct {
 	Pipeline                      pipeline.Pipeline `toml:"observationSource" gorm:"-"`
 }
 
-func ExternalJobIDEncodeStringToTopic(id uuid.UUID) common.Hash {
-	return common.BytesToHash([]byte(strings.Replace(id.String(), "-", "", 4)))
-}
-
-func ExternalJobIDEncodeBytesToTopic(id uuid.UUID) common.Hash {
-	return common.BytesToHash(common.RightPadBytes(id.Bytes(), utils.EVMWordByteLen))
-}
-
 // The external job ID (UUID) can be encoded into a log topic (32 bytes)
 // by taking the string representation of the UUID, removing the dashes
 // so that its 32 characters long and then encoding those characters to bytes.
 func (j Job) ExternalIDEncodeStringToTopic() common.Hash {
-	return ExternalJobIDEncodeStringToTopic(j.ExternalJobID)
+	return common.BytesToHash([]byte(strings.Replace(j.ExternalJobID.String(), "-", "", 4)))
 }
 
 // The external job ID (UUID) can also be encoded into a log topic (32 bytes)
 // by taking the 16 bytes undelying the UUID and right padding it.
 func (j Job) ExternalIDEncodeBytesToTopic() common.Hash {
-	return ExternalJobIDEncodeBytesToTopic(j.ExternalJobID)
+	return common.BytesToHash(common.RightPadBytes(j.ExternalJobID.Bytes(), utils.EVMWordByteLen))
 }
 
 func (j Job) TableName() string {
@@ -155,7 +133,7 @@ type SpecError struct {
 }
 
 func (SpecError) TableName() string {
-	return "job_spec_errors"
+	return "job_spec_errors_v2"
 }
 
 type PipelineRun struct {
@@ -190,7 +168,6 @@ type OffchainReportingOracleSpec struct {
 	ContractConfigTrackerSubscribeInterval models.Interval      `toml:"contractConfigTrackerSubscribeInterval" gorm:"default:null"`
 	ContractConfigTrackerPollInterval      models.Interval      `toml:"contractConfigTrackerPollInterval" gorm:"type:bigint;default:null"`
 	ContractConfigConfirmations            uint16               `toml:"contractConfigConfirmations"`
-	EVMChainID                             *utils.Big           `toml:"evmChainID" gorm:"column:evm_chain_id"`
 	CreatedAt                              time.Time            `toml:"-"`
 	UpdatedAt                              time.Time            `toml:"-"`
 }
@@ -225,7 +202,7 @@ func (OffchainReportingOracleSpec) TableName() string {
 
 type ExternalInitiatorWebhookSpec struct {
 	ExternalInitiatorID int64
-	ExternalInitiator   bridges.ExternalInitiator `gorm:"foreignkey:ExternalInitiatorID;->"`
+	ExternalInitiator   models.ExternalInitiator `gorm:"foreignkey:ExternalInitiatorID;->"`
 	WebhookSpecID       int32
 	WebhookSpec         WebhookSpec `gorm:"foreignkey:WebhookSpecID;->"`
 	Spec                models.JSON
@@ -258,10 +235,9 @@ func (WebhookSpec) TableName() string {
 type DirectRequestSpec struct {
 	ID                       int32                    `toml:"-" gorm:"primary_key"`
 	ContractAddress          ethkey.EIP55Address      `toml:"contractAddress"`
-	MinIncomingConfirmations clnull.Uint32            `toml:"minIncomingConfirmations"`
 	Requesters               models.AddressCollection `toml:"requesters"`
+	MinIncomingConfirmations clnull.Uint32            `toml:"minIncomingConfirmations"`
 	MinContractPayment       *assets.Link             `toml:"minContractPaymentLinkJuels"`
-	EVMChainID               *utils.Big               `toml:"evmChainID" gorm:"column:evm_chain_id"`
 	CreatedAt                time.Time                `toml:"-"`
 	UpdatedAt                time.Time                `toml:"-"`
 }
@@ -305,25 +281,6 @@ func (CronSpec) TableName() string {
 	return "cron_specs"
 }
 
-// Need to also try integer thresholds until
-// https://github.com/pelletier/go-toml/issues/571 is addressed.
-// The UI's TOML.stringify({"threshold": 1.0}) (https://github.com/iarna/iarna-toml)
-// will return "threshold = 1" since ts/js doesn't know the
-// difference between 1.0 and 1, so we need to address it on the backend.
-type FluxMonitorSpecIntThreshold struct {
-	ContractAddress     ethkey.EIP55Address `toml:"contractAddress"`
-	Threshold           int                 `toml:"threshold"`
-	AbsoluteThreshold   int                 `toml:"absoluteThreshold"`
-	PollTimerPeriod     time.Duration
-	PollTimerDisabled   bool
-	IdleTimerPeriod     time.Duration
-	IdleTimerDisabled   bool
-	DrumbeatSchedule    string
-	DrumbeatRandomDelay time.Duration
-	DrumbeatEnabled     bool
-	MinPayment          *assets.Link
-}
-
 type FluxMonitorSpec struct {
 	ID              int32               `toml:"-" gorm:"primary_key"`
 	ContractAddress ethkey.EIP55Address `toml:"contractAddress"`
@@ -340,16 +297,14 @@ type FluxMonitorSpec struct {
 	DrumbeatRandomDelay time.Duration
 	DrumbeatEnabled     bool
 	MinPayment          *assets.Link
-	EVMChainID          *utils.Big `toml:"evmChainID" gorm:"column:evm_chain_id"`
-	CreatedAt           time.Time  `toml:"-"`
-	UpdatedAt           time.Time  `toml:"-"`
+	CreatedAt           time.Time `toml:"-"`
+	UpdatedAt           time.Time `toml:"-"`
 }
 
 type KeeperSpec struct {
 	ID              int32               `toml:"-" gorm:"primary_key"`
 	ContractAddress ethkey.EIP55Address `toml:"contractAddress"`
 	FromAddress     ethkey.EIP55Address `toml:"fromAddress"`
-	EVMChainID      *utils.Big          `toml:"evmChainID" gorm:"column:evm_chain_id"`
 	CreatedAt       time.Time           `toml:"-"`
 	UpdatedAt       time.Time           `toml:"-"`
 }
@@ -359,7 +314,6 @@ type VRFSpec struct {
 	CoordinatorAddress ethkey.EIP55Address `toml:"coordinatorAddress"`
 	PublicKey          secp256k1.PublicKey `toml:"publicKey"`
 	Confirmations      uint32              `toml:"confirmations"`
-	EVMChainID         *utils.Big          `toml:"evmChainID" gorm:"column:evm_chain_id"`
 	CreatedAt          time.Time           `toml:"-"`
 	UpdatedAt          time.Time           `toml:"-"`
 }
